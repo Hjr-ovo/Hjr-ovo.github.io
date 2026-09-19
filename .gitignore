@@ -53,10 +53,15 @@ __pycache__/
 venv/
 .pytest_cache/
 
-# ---------- 静态站点生成器的产物 ----------
-# 下面几条默认注释掉。等确定技术选型后再按需打开。
-# 注意：如果你的「源码」目录本身就叫 public / build，打开就会把自己的源码忽略掉！
-# public/
+# ---------- 静态站点产物（2026-09-19 选定 Astro 后确定）----------
+# Astro 的分工：源码在 src/ 与 public/，产物在 dist/ 与 .astro/
+# ⚠️ 关键：public/ 在 Astro 里是「源码」—— 放 favicon、图片、robots.txt 等
+#    需要被原样拷贝到网站根目录的资源。**绝对不能忽略 public/**，否则资源全丢！
+# ⚠️ 同理，src/content/ 是你写的文章，也是源码，不能忽略。
+# dist/ 已经在上面 Node 一节里忽略过了；下面补 Astro 自己的缓存目录。
+.astro/
+
+# 以下几行是其它生成器的产物，当前用 Astro 用不到，留着备用：
 # build/
 # _site/
 # .hugo_build.lock
