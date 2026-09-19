@@ -1,0 +1,70 @@
+# ============================================================
+# .gitignore —— 告诉 git「哪些文件不要管」
+# 语法：# 开头是注释，结尾带 / 表示整个文件夹
+# ============================================================
+
+# ---------- 操作系统生成的文件 ----------
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# ---------- 编辑器 / IDE ----------
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+
+# ---------- 密钥 / 环境变量（绝对不能提交，会泄露密码）----------
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.pfx
+
+# ---------- 日志 ----------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------- Node 相关（若以后用 Node 系框架或构建工具）----------
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+dist/
+.cache/
+.parcel-cache/
+.vercel/
+.netlify/
+
+# ---------- Python 相关（若以后用 Python 系生成器，如 Pelican / MkDocs）----------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# ---------- 静态站点生成器的产物 ----------
+# 下面几条默认注释掉。等确定技术选型后再按需打开。
+# 注意：如果你的「源码」目录本身就叫 public / build，打开就会把自己的源码忽略掉！
+# public/
+# build/
+# _site/
+# .hugo_build.lock
+# resources/_gen/
+
+# ---------- 临时文件 / 草稿 ----------
+*.tmp
+*.temp
+*.cache
+scratch/
+_draft/
