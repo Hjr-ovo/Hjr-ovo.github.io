@@ -1,0 +1,79 @@
+---
+const title = "站点跑通了";
+const note = "这是本地预览页。内容结构与主题都还没开始 —— 下一步先定目录规范与分类体系。";
+---
+
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="icon" href="/favicon.ico" />
+		<meta name="viewport" content="width=device-width" />
+		<meta name="generator" content={Astro.generator} />
+		<title>{title}</title>
+		<style>
+			:root {
+				--ink: #2c2c2a;
+				--muted: #5f5e5a;
+				--line: #d3d1c7;
+				--accent: #0f6e56;
+			}
+			body {
+				margin: 0;
+				padding: 3rem 1.5rem;
+				font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+				line-height: 1.7;
+				color: var(--ink);
+				background: #fdfcf9;
+			}
+			main {
+				max-width: 40rem;
+				margin: 0 auto;
+			}
+			h1 {
+				font-size: 1.5rem;
+				font-weight: 500;
+				margin: 0 0 .5rem;
+			}
+			.lead {
+				color: var(--muted);
+				margin: 0 0 2rem;
+			}
+			dl {
+				display: grid;
+				grid-template-columns: auto 1fr;
+				gap: .5rem 1.25rem;
+				border-top: 1px solid var(--line);
+				padding-top: 1.25rem;
+				margin: 0;
+			}
+			dt {
+				color: var(--muted);
+			}
+			dd {
+				margin: 0;
+				font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+				font-size: .9rem;
+			}
+			.done {
+				color: var(--accent);
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<h1>{title}</h1>
+			<p class="lead">{note}</p>
+			<dl>
+				<dt>框架</dt>
+				<dd class="done">Astro（静态站点生成器）</dd>
+				<dt>看效果</dt>
+				<dd>npm run dev</dd>
+				<dt>生成成品</dt>
+				<dd>npm run build</dd>
+				<dt>看成品</dt>
+				<dd>npm run preview</dd>
+			</dl>
+		</main>
+	</body>
+</html>
