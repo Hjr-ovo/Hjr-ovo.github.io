@@ -1,0 +1,62 @@
+---
+// 文章详情页
+//
+// 这个文件对应的是「一类页面」，不是「一篇页面」——
+// 它用 getStaticPaths 告诉 Astro：为每一篇文章各生成一个 HTML 文件。
+//
+// URL 是 /posts/<文件名>/ ，**不带分类**（见 ADR-006）：
+//   分类体系还在试错期，一旦 URL 里带了分类，以后改分类就是一批死链。
+//
+// [...slug] 这种带方括号的写法叫「动态路由」：
+//   方括号里是变量名，Astro 会拿 getStaticPaths 返回的 slug 去填。
+
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { formatDate, isoDate } from '../../utils/format-date';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('posts', ({ data }) => !data.draft);
+
+  return posts.map((post) => ({
+    // post.id 就是文件名（不含 .md），例如 astro-install-pitfalls
+    params: { slug: post.id },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+---
+
+<BaseLayout title={post.data.title} description={post.data.description}>
+  <article>
+    <a class="back-link" href="/">← 返回文章列表</a>
+
+    <header>
+      <h1>{post.data.title}</h1>
+
+      <p class="post-meta">
+        <time datetime={isoDate(post.data.pubDate)}>
+          {formatDate(post.data.pubDate)}
+        </time>
+        {post.data.updatedDate && (
+          <>
+            {' · 更新于 '}
+            <time datetime={isoDate(post.data.updatedDate)}>
+              {formatDate(post.data.updatedDate)}
+            </time>
+          </>
+        )}
+      </p>
+
+      <div class="tag-row">
+        <span class="tag">{post.data.category}</span>
+        {post.data.tags.map((tag) => (
+          <span class="tag muted">{tag}</span>
+        ))}
+      </div>
+    </header>
+
+    <Content />
+  </article>
+</BaseLayout>
