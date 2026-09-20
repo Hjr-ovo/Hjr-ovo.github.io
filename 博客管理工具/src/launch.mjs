@@ -10,7 +10,7 @@
 //   日志照样有 → 启动失败时能看原因。
 
 import { spawn } from 'node:child_process';
-import { openSync, writeFileSync, mkdirSync } from 'node:fs';
+import { openSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
