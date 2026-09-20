@@ -2,8 +2,8 @@
 // 集中放一处，避免同一个站点名散落在十几个文件里。
 
 export const SITE = {
-  title: '黄骏然的技术笔记',
+  title: 'Hjr-ovo 的技术笔记',
   description: '计算机学习、开发工具踩坑、项目实践 —— 都是自己真踩过的。',
-  author: '黄骏然',
+  author: 'Hjr-ovo',
   lang: 'zh-CN',
 } as const;
