@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>博客管理工具</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+
+  <body>
+    <!-- ============ 顶栏 ============ -->
+    <header class="topbar">
+      <div class="topbar-inner">
+        <h1 class="brand">博客管理工具</h1>
+
+        <div class="topbar-actions">
+          <span id="blog-status" class="status status-off">博客未启动</span>
+          <button id="btn-open-blog" class="btn btn-primary">打开博客</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <!-- ============ 文章列表 ============ -->
+      <section id="view-list">
+        <div class="list-head">
+          <h2>文章列表 <span id="post-count" class="count"></span></h2>
+          <button id="btn-new" class="btn btn-primary">＋ 新建文章</button>
+        </div>
+
+        <p id="posts-dir-hint" class="hint"></p>
+
+        <div id="list-loading" class="placeholder">读取中…</div>
+        <div id="list-empty" class="placeholder" hidden>
+          还没有文章。点右上角「新建文章」发第一篇。
+        </div>
+
+        <ul id="post-list" class="post-list"></ul>
+      </section>
+
+      <!-- ============ 编辑页 ============ -->
+      <section id="view-edit" hidden>
+        <div class="edit-head">
+          <button id="btn-back" class="btn btn-ghost">← 返回列表</button>
+          <h2 id="edit-title">新建文章</h2>
+        </div>
+
+        <div id="save-message" class="banner" hidden></div>
+
+        <!-- 元数据表单 -->
+        <fieldset class="form-block">
+          <legend>文章信息</legend>
+
+          <label class="field">
+            <span class="field-label">标题 <em>必填</em></span>
+            <input id="f-title" type="text" placeholder="例：npm install 卡死 23 分钟：一次 esbuild 脚本导致的假死" />
+          </label>
+
+          <label class="field">
+            <span class="field-label">摘要 <em>必填</em></span>
+            <textarea id="f-description" rows="2" placeholder="一句话说清这篇讲什么。给搜索引擎和列表页用。"></textarea>
+          </label>
+
+          <div class="field-row">
+            <label class="field">
+              <span class="field-label">发布日期 <em>必填</em></span>
+              <input id="f-pubdate" type="date" />
+            </label>
+
+            <label class="field">
+              <span class="field-label">更新日期 <em class="optional">选填</em></span>
+              <input id="f-updateddate" type="date" />
+            </label>
+
+            <label class="field">
+              <span class="field-label">分类 <em>必填</em></span>
+              <input id="f-category" type="text" list="category-list" placeholder="选一个或自己填" />
+              <datalist id="category-list"></datalist>
+            </label>
+          </div>
+
+          <label class="field">
+            <span class="field-label">标签 <em class="optional">选填</em></span>
+            <input id="f-tags" type="text" placeholder="用逗号分隔，例：npm, Windows, 踩坑" />
+          </label>
+
+          <label class="field field-check">
+            <input id="f-draft" type="checkbox" />
+            <span>存为草稿（不显示在博客上，只自己看）</span>
+          </label>
+        </fieldset>
+
+        <!-- 文件名 -->
+        <fieldset class="form-block">
+          <legend>文件名 <span class="legend-note">决定文章 URL</span></legend>
+
+          <div class="field">
+            <span class="field-label">
+              文件名（英文短横线式，不含 .md）
+              <em>必填</em>
+              <button id="btn-suggest" class="btn btn-tiny" type="button">从标题生成</button>
+            </span>
+            <input id="f-slug" type="text" placeholder="npm-install-hang-esbuild" />
+          </div>
+
+          <p class="field-note">
+            URL 预览：<code id="url-preview">/posts/&hellip;</code>
+          </p>
+
+          <p id="slug-warning" class="warn" hidden></p>
+
+          <details id="rename-box" class="rename-box" hidden>
+            <summary>改名会让旧链接失效 —— 点这里看说明</summary>
+            <p>
+              文件名的变化就是 URL 的变化。博客上线后，改名字会让别人收藏的旧链接、外站的引用全部失效（404）。
+              <strong>现在还没上线，所以改名的代价是 0。</strong>
+              工具不会自动帮你把旧链接跳转到新地址 —— 那个要等上线时再做。
+            </p>
+          </details>
+        </fieldset>
+
+        <!-- 正文 -->
+        <fieldset class="form-block">
+          <legend>正文 <span class="legend-note">Markdown</span></legend>
+
+          <div class="body-tools">
+            <button id="btn-import" class="btn btn-ghost" type="button">从文件导入正文…</button>
+            <input id="import-file" type="file" accept=".md,.mdx,.txt" hidden />
+            <span id="body-stats" class="body-stats"></span>
+          </div>
+
+          <textarea id="f-body" class="body-editor" placeholder="在这里写 Markdown 正文……"></textarea>
+        </fieldset>
+
+        <!-- 操作栏 -->
+        <div class="edit-actions">
+          <button id="btn-save" class="btn btn-primary btn-lg">保存</button>
+          <button id="btn-cancel" class="btn btn-ghost">取消</button>
+          <span class="spacer"></span>
+          <button id="btn-delete" class="btn btn-danger" hidden>删除这篇文章</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- ============ 删除确认弹窗 ============ -->
+    <div id="modal" class="modal" hidden>
+      <div class="modal-card">
+        <h3 id="modal-title">确认删除</h3>
+        <p id="modal-text"></p>
+        <div id="modal-extra" class="modal-extra" hidden></div>
+        <div class="modal-actions">
+          <button id="modal-cancel" class="btn btn-ghost">取消</button>
+          <button id="modal-ok" class="btn btn-danger">确定删除</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 改名确认弹窗 ============ -->
+    <div id="rename-modal" class="modal" hidden>
+      <div class="modal-card">
+        <h3>标题改了，要不要顺便改文件名？</h3>
+        <p>
+          标题从「<span id="rm-old-title"></span>」变成了「<span id="rm-new-title"></span>」。
+        </p>
+        <p>
+          改文件名 = 改 URL：
+        </p>
+        <ul class="rm-urls">
+          <li>现在：<code id="rm-old-url"></code></li>
+          <li>改后：<code id="rm-new-url"></code></li>
+        </ul>
+        <p class="rm-note">
+          <strong>默认建议不改。</strong>
+          博客还没上线，改了也没人受影响；但养成"改标题就改名"的习惯后，上线某次改标题就会造成死链。
+        </p>
+        <div class="modal-actions">
+          <button id="rm-keep" class="btn btn-primary">不改，只改标题</button>
+          <button id="rm-change" class="btn btn-ghost">顺便改成新的</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 提示条 ============ -->
+    <div id="toast" class="toast" hidden></div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
