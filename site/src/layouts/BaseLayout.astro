@@ -1,0 +1,61 @@
+---
+// 基础布局：所有页面共用这层"外框"
+//
+// 它负责三件事：
+//   1. 生成 HTML 的 head（编码、视口、标题、描述）
+//   2. 全站统一的页头（站名 + 导航）
+//   3. 全站统一的页脚
+//
+// 具体页面只需要把自己的内容塞进 <slot /> 位置即可。
+// 这样改导航栏时只用改这一个文件。
+
+import { SITE } from '../consts';
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title, description = SITE.description } = Astro.props;
+
+// 首页不拼站名（避免出现"站名 - 站名"），其他页面拼成"页面名 - 站名"
+const pageTitle = title ? `${title} - ${SITE.title}` : SITE.title;
+---
+
+<!doctype html>
+<html lang={SITE.lang}>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+  </head>
+
+  <body>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="site-title" href="/">{SITE.title}</a>
+        <nav class="site-nav">
+          <a href="/">文章</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <div class="wrap">
+        <slot />
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        © {new Date().getFullYear()} {SITE.author}
+      </div>
+    </footer>
+  </body>
+</html>

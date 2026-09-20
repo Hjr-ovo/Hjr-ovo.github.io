@@ -1,0 +1,309 @@
+/* 全局样式：站点所有页面的基础排版
+ *
+ * 设计原则（第一版刻意保持朴素）：
+ *   - 不做视觉炫技，先保证「读得下去」：字距、行高、对比度
+ *   - 技术内容的三块硬骨头必须好看：代码块、表格、引用
+ *   - 亮色为主，深色模式留给以后（需求里属「想要有」）
+ */
+
+:root {
+  --ink: #2c2c2a;
+  --muted: #6b6a65;
+  --line: #e2e0d8;
+  --bg: #fdfcf9;
+  --bg-card: #ffffff;
+  --accent: #0f6e56;
+  --accent-soft: #e1f5ee;
+  --code-bg: #f4f3ee;
+
+  --maxw: 46rem;
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 布局骨架 ---------- */
+
+.wrap {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+.site-header {
+  border-bottom: 1px solid var(--line);
+  padding: 1.25rem 0;
+  margin-bottom: 3rem;
+}
+
+.site-header .wrap {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.site-title {
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.site-title:hover {
+  color: var(--accent);
+}
+
+.site-nav {
+  display: flex;
+  gap: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.site-nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.site-nav a:hover {
+  color: var(--accent);
+}
+
+main {
+  padding-bottom: 4rem;
+}
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  padding: 1.5rem 0 3rem;
+  margin-top: 4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ---------- 标题 ---------- */
+
+h1, h2, h3, h4 {
+  line-height: 1.35;
+  font-weight: 500;
+  margin: 2em 0 0.6em;
+}
+
+h1 { font-size: 1.65rem; margin-top: 0; }
+h2 { font-size: 1.3rem; }
+h3 { font-size: 1.1rem; }
+
+/* ---------- 链接 ---------- */
+
+a {
+  color: var(--accent);
+}
+
+/* ---------- 文章列表 ---------- */
+
+.post-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.post-item {
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.post-item:first-child {
+  border-top: 1px solid var(--line);
+}
+
+.post-item h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+}
+
+.post-item h2 a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.post-item h2 a:hover {
+  color: var(--accent);
+}
+
+.post-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+.post-desc {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+/* 分类与标签的小色块 */
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.7rem 0 0;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  padding: 0 0.55rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.tag.muted {
+  background: #f1efe8;
+  color: var(--muted);
+}
+
+/* ---------- 文章正文 ---------- */
+
+article header {
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+article header h1 {
+  margin-bottom: 0.5rem;
+}
+
+/* 正文里的段落与列表 */
+article p,
+article li {
+  margin: 0.9em 0;
+}
+
+article ul,
+article ol {
+  padding-left: 1.4em;
+}
+
+/* 代码块 —— 技术博客的命根子 */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+
+pre {
+  background: var(--code-bg);
+  padding: 1rem 1.1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  border: 1px solid var(--line);
+}
+
+/* 关键：代码块内部的 code 不再叠加背景和内边距，否则会出现双层底色 */
+pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  border-radius: 0;
+}
+
+/* Shiki 会给代码块自带行内背景色（见 astro.config.mjs 里的主题设置），
+   这里不用 !important 强行覆盖，只是确保圆角与内边距不被它顶掉 */
+.astro-code {
+  border-radius: 8px;
+}
+
+/* 表格 —— 技术文档常见 */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  margin: 1.2em 0;
+  display: block;
+  overflow-x: auto;
+}
+
+th, td {
+  border: 1px solid var(--line);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+th {
+  background: #f7f6f1;
+  font-weight: 500;
+}
+
+/* 引用 */
+blockquote {
+  margin: 1.2em 0;
+  padding: 0.2em 1.1em;
+  border-left: 3px solid var(--accent-soft);
+  color: var(--muted);
+}
+
+blockquote p:first-child { margin-top: 0; }
+blockquote p:last-child { margin-bottom: 0; }
+
+/* 分隔线 */
+hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 2.5em 0;
+}
+
+/* 图片不撑破容器 */
+article img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+/* ---------- 返回链接 ---------- */
+
+.back-link {
+  display: inline-block;
+  font-size: 0.88rem;
+  margin-bottom: 1.5rem;
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.back-link:hover {
+  color: var(--accent);
+}
+
+/* ---------- 空状态 ---------- */
+
+.empty {
+  padding: 3rem 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty code {
+  font-size: 0.85rem;
+}
