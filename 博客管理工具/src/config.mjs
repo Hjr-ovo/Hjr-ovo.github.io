@@ -32,7 +32,14 @@ export const TOOL_PORT = 5678;
 
 // 工具只监听本机。理由见 技术架构.md 第六节第 9 条：
 // 只给自己用，不需要局域网访问，减少暴露面。
+//
+// ⚠️ 用 127.0.0.1 而不是 localhost：
+//    localhost 可能先解析到 IPv6 的 ::1，而这里只绑了 IPv4，
+//    于是"浏览器能开、程序连不上"。实测踩过地址族的坑（BUG-007）。
 export const TOOL_HOST = '127.0.0.1';
+
+// 工具自己的地址（启动提示、打开浏览器、单实例探测都用它）
+export const TOOL_BASE_URL = `http://${TOOL_HOST}:${TOOL_PORT}/`;
 
 // Astro 开发服务器端口（Astro 默认就是 4321）
 export const ASTRO_PORT = 4321;

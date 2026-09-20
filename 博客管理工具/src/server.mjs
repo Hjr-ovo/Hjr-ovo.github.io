@@ -11,7 +11,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { TOOL_HOST, TOOL_PORT, TOOL_ROOT, CATEGORIES, POSTS_DIR, BACKUP_DIR } from './config.mjs';
+import { TOOL_HOST, TOOL_PORT, TOOL_BASE_URL, TOOL_ROOT, CATEGORIES, POSTS_DIR, BACKUP_DIR } from './config.mjs';
 import * as posts from './posts.mjs';
 import { slugify, validateSlug } from './slug.mjs';
 import { today } from './frontmatter.mjs';
@@ -43,6 +43,26 @@ const server = http.createServer(async (req, res) => {
 
 async function handleApi(req, res, pathname, url) {
   const method = req.method;
+
+  // ---- 身份识别：确认"这个端口上跑的确实是我们这个工具" ----
+  // 用途：启动脚本靠它判断"工具已经在跑了"，而不是笼统地报"端口被占"。
+  if (pathname === '/api/hello' && method === 'GET') {
+    return sendJson(res, 200, { ok: true, app: 'blog-tool', v: 1 });
+  }
+
+  // ---- 让已在运行的工具打开/聚焦浏览器窗口 ----
+  if (pathname === '/api/focus' && method === 'POST') {
+    const ok = openBrowser(TOOL_BASE_URL);
+    return sendJson(res, 200, { ok, error: ok ? '' : '打开浏览器失败' });
+  }
+
+  // ---- 关闭工具自己 ----
+  if (pathname === '/api/quit' && method === 'POST') {
+    sendJson(res, 200, { ok: true });
+    // 稍等一下再退，保证上面这个响应能发出去
+    setTimeout(() => process.exit(0), 300);
+    return;
+  }
 
   // ---- 文章：列表 ----
   if (pathname === '/api/posts' && method === 'GET') {
@@ -224,31 +244,62 @@ function readJsonBody(req) {
 
 // ---------------- 启动 ----------------
 
+// --quiet：给「启动.bat」用。窗口会自己关掉，没人看那一大坨横幅，
+// 所以只留几行关键信息（会写进 启动日志.txt）。
+const QUIET = process.argv.includes('--quiet');
+
 async function main() {
   // 端口检查：先确认 5678 没被占
   if (await isPortInUse(TOOL_PORT)) {
+    // 占了端口的是不是「我们自己」？是的话就当重复启动处理，别吓着用户
+    if (await isOurToolRunning()) {
+      console.log('博客管理工具已经开着了，正在打开界面……');
+      console.log(TOOL_BASE_URL);
+      openBrowser(TOOL_BASE_URL);
+      process.exit(0);
+    }
+
+    // 真的是别的程序占了
     console.error('');
-    console.error(`✗ 端口 ${TOOL_PORT} 已经被占用了。`);
-    console.error('  可能工具已经开着（看看浏览器里有没有 http://127.0.0.1:5678）。');
-    console.error('  或者别的程序占了这个端口 —— 改一下 src/config.mjs 里的 TOOL_PORT。');
+    console.error(`✗ 端口 ${TOOL_PORT} 被别的程序占用了（那个程序不是本工具）。`);
+    console.error('  改一下 src/config.mjs 里的 TOOL_PORT 换个端口试试。');
     console.error('');
     process.exit(1);
   }
 
   server.listen(TOOL_PORT, TOOL_HOST, () => {
-    const url = `http://${TOOL_HOST}:${TOOL_PORT}/`;
-    console.log('');
-    console.log('  博客管理工具已启动');
-    console.log('  ────────────────────────────────────────');
-    console.log(`  管理界面：  ${url}`);
-    console.log(`  文章目录：  ${POSTS_DIR}`);
-    console.log(`  删除备份：  ${BACKUP_DIR}`);
-    console.log('  ────────────────────────────────────────');
-    console.log('  关掉这个窗口 = 关闭工具（博客不受影响）');
-    console.log('');
+    if (QUIET) {
+      console.log(`博客管理工具已启动： ${TOOL_BASE_URL}`);
+      console.log(`文章目录： ${POSTS_DIR}`);
+      console.log(`删除备份： ${BACKUP_DIR}`);
+    } else {
+      console.log('');
+      console.log('  博客管理工具已启动');
+      console.log('  ────────────────────────────────────────');
+      console.log(`  管理界面：  ${TOOL_BASE_URL}`);
+      console.log(`  文章目录：  ${POSTS_DIR}`);
+      console.log(`  删除备份：  ${BACKUP_DIR}`);
+      console.log('  ────────────────────────────────────────');
+      console.log('  想关闭工具：用界面右上角的「关闭工具」按钮');
+      console.log('');
+    }
 
-    openBrowser(url);
+    openBrowser(TOOL_BASE_URL);
   });
+}
+
+// 问一下端口上的服务："你是博客管理工具吗？"
+async function isOurToolRunning() {
+  try {
+    const res = await fetch(`http://${TOOL_HOST}:${TOOL_PORT}/api/hello`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data && data.app === 'blog-tool';
+  } catch {
+    return false;
+  }
 }
 
 main();
