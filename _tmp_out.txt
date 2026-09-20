@@ -1,0 +1,12 @@
+﻿== commit ==
+[main 303b2cd] 修改: 记录暂不接远程仓库的决定
+ 2 files changed, 23 insertions(+), 2 deletions(-)
+
+== log --oneline ==
+303b2cd 修改: 记录暂不接远程仓库的决定
+94045cd 修改: 回填 CHANGELOG 提交号并补充记账提交规则
+211c932 新增: 启用 Git 版本控制并补充相关约定
+4b860ff 新增: 初始化项目（文档体系 + 版本控制）
+
+== status ==
+
