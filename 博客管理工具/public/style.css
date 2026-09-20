@@ -5,6 +5,21 @@
  * 变量集中定义在 :root，想换配色只改这一块。
  */
 
+/* ⚠️ 最要紧的一条，别删也别挪到后面去
+ *
+ * HTML 的 hidden 属性靠浏览器默认样式 display:none 生效，
+ * 但样式表里任何一条显式 display（如 .modal 的 display:flex）
+ * 都会盖过它 —— 后果是"本该藏起来的元素照样显示"。
+ * 用 !important 钉死，保证 hidden 永远说了算。
+ *
+ * 踩过的坑：两个弹窗都带 .modal（display:flex），
+ * 于是页面一打开就浮现出改名弹窗，而且按钮点了没反应
+ * （因为弹窗根本没被程序调用过，事件没绑上）。见 BUG-009。
+ */
+[hidden] {
+  display: none !important;
+}
+
 :root {
   --bg: #f7f7f5;
   --surface: #ffffff;
