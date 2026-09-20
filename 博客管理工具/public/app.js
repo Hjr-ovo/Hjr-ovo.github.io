@@ -669,11 +669,52 @@ function closeModal() {
   modalHandlers = { onOk: null, onCancel: null };
 }
 
+// 把弹窗包成 Promise 用起来方便：await askModal(...) 拿到 true/false
+function askModal(title, text, opts = {}) {
+  return new Promise((resolve) => {
+    showModal(title, text, {
+      ...opts,
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
+    });
+  });
+}
+
+// 关闭管理工具自己。
+// 注意：只关管理工具，博客运行在另一个进程里，不受影响。
+async function quitTool() {
+  const yes = await askModal(
+    '关闭博客管理工具？',
+    '关掉后这个管理界面就打不开了（浏览器标签页可以一起关掉）。\n\n' +
+      '注意：博客本身不受影响 —— 它跑在另一个进程里。\n' +
+      '想再打开管理工具时，双击一次「启动.bat」就行。',
+    { danger: true, okText: '关闭工具', cancelText: '取消' }
+  );
+
+  if (!yes) return;
+
+  try {
+    await apiPost('/api/quit');
+  } catch {
+    // 服务已经退出时这个请求会失败，属正常情况，忽略
+  }
+
+  document.body.innerHTML =
+    '<div class="wrap" style="padding-top:60px">' +
+    '<h2 style="margin-bottom:12px">管理工具已关闭</h2>' +
+    '<p class="hint" style="font-size:14px;line-height:1.8">' +
+    '这个标签页可以关掉了。<br />' +
+    '想再用的时候，双击一次「启动.bat」即可。<br /><br />' +
+    '博客本身不受影响。' +
+    '</p></div>';
+}
+
 // ============ 事件绑定 ============
 
 function bindEvents() {
   // 顶栏
   $('btn-open-blog').onclick = openBlog;
+  $('btn-quit').onclick = quitTool;
 
   // 列表
   $('btn-new').onclick = newPost;
