@@ -6,4 +6,5 @@ export const SITE = {
   description: '计算机学习、开发工具踩坑、项目实践 —— 都是自己真踩过的。',
   author: 'Hjr-ovo',
   lang: 'zh-CN',
+  avatar: '/avatar.png',
 } as const;

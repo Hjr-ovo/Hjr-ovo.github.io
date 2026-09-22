@@ -51,10 +51,27 @@ body {
 
 .site-header .wrap {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+}
+
+/* 站名 = 头像 + 文字，整体是一个链接 */
+.site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+}
+
+.site-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
 }
 
 .site-title {
@@ -64,7 +81,7 @@ body {
   text-decoration: none;
 }
 
-.site-title:hover {
+.site-brand:hover .site-title {
   color: var(--accent);
 }
 
@@ -93,6 +110,22 @@ main {
   margin-top: 4rem;
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+.footer-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.footer-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  /* 页脚文字是次要信息，头像也压低存在感 */
+  opacity: 0.75;
 }
 
 /* ---------- 标题 ---------- */
