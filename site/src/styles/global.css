@@ -140,6 +140,14 @@ h1 { font-size: 1.65rem; margin-top: 0; }
 h2 { font-size: 1.3rem; }
 h3 { font-size: 1.1rem; }
 
+/* 首页顶部的一句话介绍。让列表上方有点"人味"，
+   也顺便解释这个站是干什么的 —— 混进来的陌生人一眼能看懂。 */
+.intro {
+  margin: 0 0 2.5rem;
+  color: var(--muted);
+  font-size: 1.02rem;
+}
+
 /* ---------- 链接 ---------- */
 
 a {
@@ -155,7 +163,7 @@ a {
 }
 
 .post-item {
-  padding: 1.5rem 0;
+  padding: 1.6rem 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -163,9 +171,16 @@ a {
   border-top: 1px solid var(--line);
 }
 
+/* 文章标题 —— 列表里最该被看见的东西，给足字号和粗细。
+   h2 默认是 1.3rem / 字重 500（见上面"标题"一节），
+   对"条目标题"来说偏小偏轻，所以这里单独加重。 */
 .post-item h2 {
-  margin: 0 0 0.35rem;
-  font-size: 1.15rem;
+  /* 用 em 跟着根字号走；读者若把浏览器字号调大，标题会一起变大 */
+  font-size: 1.45em;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.45rem;
 }
 
 .post-item h2 a {
@@ -177,12 +192,7 @@ a {
   color: var(--accent);
 }
 
-.post-meta {
-  font-size: 0.85rem;
-  color: var(--muted);
-  margin: 0 0 0.5rem;
-}
-
+/* 摘要保持次一级：浅色、稍小，跟标题拉开层次 */
 .post-desc {
   margin: 0;
   color: var(--muted);
