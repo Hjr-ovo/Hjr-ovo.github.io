@@ -25,6 +25,12 @@ export const POSTS_DIR = path.join(SITE_ROOT, 'src', 'content', 'posts');
 // 删除文章的备份目录（落在 .workbuddy/ 里，已被 .gitignore 整块忽略）
 export const BACKUP_DIR = path.join(REPO_ROOT, '.workbuddy', 'tmp', 'deleted-posts');
 
+// ★ 改名重定向表 —— 记录「旧文件名 → 新文件名」。
+//   静态站没有服务端，改名后旧链接会直接 404；
+//   这张表让 Astro 在构建时给旧地址生成一个跳转页（见 技术架构.md 5.5.2）。
+//   文件在 site/src/data/ 下，**属于站点源码，要进 git**。
+export const REDIRECTS_FILE = path.join(SITE_ROOT, 'src', 'data', 'redirects.json');
+
 // 博客进程号的记录文件。
 // 作用：管理工具启动博客后把进程号写在这里，这样即使管理工具自己重启过，
 // 也还能找到那个博客进程并把它关掉（光靠内存记不住）。

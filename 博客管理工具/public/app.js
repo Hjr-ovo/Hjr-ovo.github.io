@@ -564,21 +564,38 @@ async function save() {
 
 // ============ 改名询问（ADR-011）============
 
-function askRename(newTitle) {
+async function askRename(newTitle) {
+  // 先把新文件名算出来，让弹窗里能显示**真实的**新 URL。
+  // 以前这里写的是 '/posts/<新的文件名>/' 占位符 —— 用户根本看不见自己要改成什么，
+  // 等于让他盲选。现在提前算好，选择前就能看到前后对比。
+  let candidate = '';
+  try {
+    const res = await apiPost('/api/slug', { title: newTitle });
+    if (res.ok && res.candidate) candidate = res.candidate;
+  } catch {
+    // 算不出来就不显示新 URL，弹窗照常弹（用户仍可选择「保持文件名不变」）
+  }
+
   return new Promise((resolve) => {
     const modal = $('rename-modal');
 
     $('rm-old-title').textContent = state.originalTitle || '(空)';
     $('rm-new-title').textContent = newTitle;
     $('rm-old-url').textContent = '/posts/' + state.originalSlug + '/';
-    $('rm-new-url').textContent = '/posts/<新的文件名>/';
+    $('rm-new-url').textContent = candidate
+      ? '/posts/' + candidate + '/'
+      : '（暂无法自动生成，可稍后手动改）';
+
+    // 文件名没变的话，「顺便改」按钮没意义，直接禁掉
+    const changeBtn = $('rm-change');
+    changeBtn.disabled = !candidate || candidate === state.originalSlug;
 
     modal.hidden = false;
 
     const cleanup = () => {
       modal.hidden = true;
       $('rm-keep').onclick = null;
-      $('rm-change').onclick = null;
+      changeBtn.onclick = null;
     };
 
     // 默认：不改
@@ -587,17 +604,10 @@ function askRename(newTitle) {
       resolve(false);
     };
 
-    $('rm-change').onclick = async () => {
+    changeBtn.onclick = async () => {
       cleanup();
 
-      const res = await apiPost('/api/slug', { title: newTitle });
-      if (!res.ok || !res.candidate) {
-        toast('没能生成新文件名，文件名保持原样');
-        resolve(false);
-        return;
-      }
-
-      const confirmed = await askNewSlugName(res.candidate);
+      const confirmed = await askNewSlugName(candidate);
       if (!confirmed) {
         resolve(false);
         return;
@@ -621,12 +631,25 @@ function askRename(newTitle) {
         updateSlugPreview();
         await loadPosts();
 
-        showBanner(
-          'warn',
-          `文件名已改：${r.oldUrl}\n       → ${r.newUrl}\n\n` +
-            '注意：旧链接已经失效（现在还没上线，所以没人受影响）。\n' +
-            '以后再改标题，工具还会问你。',
-        );
+        // 重定向表没写成功时说清楚 —— 改名本身已经生效，但旧链接会 404
+        if (r.redirectAdded === false) {
+          showBanner(
+            'error',
+            `文件名已改：${r.oldUrl}\n       → ${r.newUrl}\n\n` +
+              '⚠️ 但旧地址的跳转页没能记上：\n' +
+              (r.redirectError || '未知原因') +
+              '\n\n文章本身没丢，但访问旧链接会 404。\n' +
+              '请把这个情况告诉我，我来看怎么补。',
+          );
+        } else {
+          showBanner(
+            'warn',
+            `文件名已改：${r.oldUrl}\n       → ${r.newUrl}\n\n` +
+              '旧链接不会失效 —— 构建后会生成一个跳转页，\n' +
+              '访问旧地址的人会自动被送到新地址。\n' +
+              `旧文件也备份了一份：${r.backupPath}`,
+          );
+        }
       } catch (err) {
         showBanner('error', '改名出错：\n' + (err.message || err));
       }

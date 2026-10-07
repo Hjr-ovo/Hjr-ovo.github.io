@@ -171,8 +171,13 @@
           <li>改后：<code id="rm-new-url"></code></li>
         </ul>
         <p class="rm-note">
-          <strong>默认建议不改。</strong>
-          博客还没上线，改了也没人受影响；但养成"改标题就改名"的习惯后，上线某次改标题就会造成死链。
+          <strong>改成新的也没关系 —— 旧链接会自动跳到新地址。</strong>
+          改名时工具会顺手记一张跳转表，构建后旧地址那页会自动把人送到新地址，
+          不会出现 404。旧文件同时会备份一份。
+        </p>
+        <p class="rm-note rm-note-quiet">
+          不过还是建议非必要不改：URL 里带的是英文关键词，改标题**不需要**动它。
+          只有当文章内容真的换了方向、老 URL 已经不搭了，改才划算。
         </p>
         <div class="modal-actions">
           <button id="rm-keep" class="btn btn-primary">不改，只改标题</button>

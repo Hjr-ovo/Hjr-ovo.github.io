@@ -675,6 +675,13 @@ body {
   color: var(--warn-text) !important;
 }
 
+/* 第二段说明（"建议非必要不改"）不需要再抢眼，降成普通提示色 */
+.rm-note-quiet {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted) !important;
+}
+
 /* ============ Toast ============ */
 
 .toast {

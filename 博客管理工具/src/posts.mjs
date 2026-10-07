@@ -8,7 +8,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { POSTS_DIR, BACKUP_DIR } from './config.mjs';
+import { POSTS_DIR, BACKUP_DIR, REDIRECTS_FILE, POST_URL_PREFIX } from './config.mjs';
 import { parseFrontmatter, buildFile, today, checkBody } from './frontmatter.mjs';
 import { validateSlug } from './slug.mjs';
 
@@ -210,9 +210,11 @@ export async function updatePost({ slug, data, body, bumpUpdatedDate = true }) {
 /**
  * 给文章改文件名（= 换 URL）
  *
- * ⚠️ 这个动作会改变文章 URL。上线之后旧链接会失效。
- * 本期不做重定向（技术架构.md 5.5.2）——
- * 所以界面上必须明确告诉用户"URL 要变了"。
+ * ⚠️ 这个动作会改变文章 URL。
+ * 工具会顺手做两件事把旧链接接住（见 技术架构.md 5.5.2）：
+ *   ① 往重定向表里追加一条「旧地址 → 新地址」，
+ *      构建时 Astro 会在旧地址生成一个跳转页，访问者不会 404；
+ *   ② 把旧文件另存一份到备份目录，万一改错还能捞回来。
  *
  * @param {object} params
  * @param {string} params.oldSlug 旧文件名
@@ -236,14 +238,116 @@ export async function renamePost({ oldSlug, newSlug }) {
     throw new Error(`已经有叫 \`${newSlug}\` 的文件了，不能覆盖`);
   }
 
+  // ---- ① 备份旧文件（跟删除走同一套逻辑：备份目录 + 时间戳）----
+  await ensureDirs();
+
+  const raw = await fs.readFile(oldPath, 'utf8');
+  const backupPath = path.join(BACKUP_DIR, `${timestamp()}__renamed__${oldSlug}.md`);
+  await fs.writeFile(backupPath, raw, 'utf8');
+
+  // 回读验证备份真的落盘了（BUG-002 的教训：不信任"写操作没报错"）
+  const written = await fs.readFile(backupPath, 'utf8');
+  if (written !== raw) {
+    throw new Error(
+      '备份校验失败 —— 备份文件内容和原文不一致。\n' +
+        '为安全起见，改名没有执行。请重试。',
+    );
+  }
+
+  // ---- ② 改文件名 ----
   await fs.rename(oldPath, newPath);
+
+  // ---- ③ 把旧地址记进重定向表 ----
+  // 失败不阻断改名（文件已经改好了），但要把情况报上去让界面提示用户
+  let redirectAdded = false;
+  let redirectError = '';
+  try {
+    await addRedirect(oldSlug, newSlug);
+    redirectAdded = true;
+  } catch (err) {
+    redirectError = err.message || String(err);
+  }
 
   return {
     oldSlug,
     newSlug,
-    oldUrl: `/posts/${oldSlug}/`,
-    newUrl: `/posts/${newSlug}/`,
+    oldUrl: `${POST_URL_PREFIX}${oldSlug}/`,
+    newUrl: `${POST_URL_PREFIX}${newSlug}/`,
+    backupPath,
+    redirectAdded,
+    redirectError,
   };
+}
+
+// ---------- 重定向表 ----------
+
+/**
+ * 往重定向表里追加一条「旧文件名 → 新文件名」
+ *
+ * 表结构（site/src/data/redirects.json）：
+ *   { "redirects": { "old-name": "new-name" } }
+ *
+ * 三种边界情况都处理：
+ *   · 表不存在      → 建一个新的
+ *   · 表内容坏了    → 报错，不覆盖（宁可让用户看到，也不静默丢掉已有记录）
+ *   · 旧名已经有记录 → 顺着链往下追，改成最终的那个新名（避免 A→B→C 的跳转链）
+ */
+async function addRedirect(oldSlug, newSlug) {
+  const table = await readRedirectTable();
+
+  // 如果这个旧名之前已经指向别处（A→B），现在又 B→C，
+  // 直接把 A 改指到 C —— 跳转链每多一跳都损耗权重，Google 跟到第 5 跳就放弃
+  table.redirects[oldSlug] = newSlug;
+
+  // 顺带反向修正：如果表里已经有人指向 oldSlug，把它也一并指到 newSlug
+  for (const [key, value] of Object.entries(table.redirects)) {
+    if (value === oldSlug && key !== oldSlug) {
+      table.redirects[key] = newSlug;
+    }
+  }
+
+  // 先写临时文件再改名 —— 避免写到一半断电留下半个文件（跟 updatePost 同一套做法）
+  const tmpPath = REDIRECTS_FILE + '.writing';
+  await fs.mkdir(path.dirname(REDIRECTS_FILE), { recursive: true });
+  await fs.writeFile(tmpPath, JSON.stringify(table, null, 2) + '\n', 'utf8');
+  await fs.rename(tmpPath, REDIRECTS_FILE);
+}
+
+/**
+ * 读重定向表；不存在就返回一个空的
+ */
+async function readRedirectTable() {
+  let raw;
+  try {
+    raw = await fs.readFile(REDIRECTS_FILE, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      return {
+        _说明: '文章改名后，旧地址 → 新地址的对照表。由博客管理工具在改名时自动追加，一般不用手改。',
+        _格式: '键是旧文件名，值是新文件名。例如 "old-name": "new-name"',
+        _为什么需要:
+          '静态站没有服务端，删除旧文件后旧链接会直接 404。这张表让构建时自动生成一个跳转页顶替旧位置。',
+        redirects: {},
+      };
+    }
+    throw err;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      `重定向表内容不是合法 JSON，没有改动它：\n${REDIRECTS_FILE}\n` +
+        '请手工检查这个文件（多半是多了或少了一个逗号）。',
+    );
+  }
+
+  if (!parsed.redirects || typeof parsed.redirects !== 'object') {
+    parsed.redirects = {};
+  }
+
+  return parsed;
 }
 
 // ---------- 删除（最危险，先备份）----------
@@ -364,4 +468,4 @@ function timestamp() {
 
 // ---------- 供外部使用 ----------
 
-export { POSTS_DIR, BACKUP_DIR };
+export { POSTS_DIR, BACKUP_DIR, REDIRECTS_FILE };
