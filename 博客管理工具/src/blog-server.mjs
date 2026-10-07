@@ -1,23 +1,36 @@
 // Astro 开发服务器的进程管理
 //
-// 负责三件事：
+// 负责这几件事：
 //   ① 检测 4321 端口上是不是已经跑着 Astro
 //   ② 没跑就启动它（调 npm run dev）
 //   ③ 启动后自动打开浏览器
+//   ④ 关掉它（先温柔、超时再强杀）
 //
 // 设计要点（见 技术架构.md 第六节）：
-//   - 工具**不接管** Astro 的进程管理。它只是"替你敲了一次 npm run dev"，
-//     服务器仍然是一个独立进程，你在别处照样能控制它。
+//   - 服务器是一个**独立进程** —— 工具只是"替你敲了一次 npm run dev"。
+//     关博客**不会**动管理工具，关管理工具也**不会**动博客（两者独立）。
 //   - 已经在跑就**不重复启动** —— 重复启动只会撞端口报错。
+//   - 关的时候要认准"这是我们的博客"，别把别人的程序杀了（见 stopBlog 注释）。
 
 import net from 'node:net';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 
-import { ASTRO_PORT, NODE_EXE, NPM_CLI, SITE_ROOT, BLOG_URL } from './config.mjs';
+import {
+  ASTRO_PORT,
+  NODE_EXE,
+  NPM_CLI,
+  SITE_ROOT,
+  BLOG_URL,
+  BLOG_PID_FILE,
+} from './config.mjs';
 
-// 记录由本工具启动的 Astro 进程（只用于"是否是我们起的"的判断，不做强制管理）
+// 记录由本工具启动的 Astro 进程（内存里的那份，用来快速判断）
 let spawnedProcess = null;
+
+// 温柔关闭的等待上限。超过就强杀。
+const GRACEFUL_WAIT_MS = 5000;
 
 /**
  * 检测某端口上是否已经有服务在监听
@@ -163,6 +176,10 @@ export async function startBlog() {
 
     spawnedProcess = child;
 
+    // 把进程号落盘：这样管理工具自己重启过，也还能找到这个博客进程。
+    // （内存里的 spawnedProcess 会随工具关闭而丢失，磁盘上这份不会。）
+    savePid(child.pid);
+
     const collect = (buf) => {
       // 去掉 ANSI 颜色码 —— 否则把日志显示到界面上会是一堆 ^[[36m 之类的乱码
       const text = buf.toString().replace(/\x1b\[[0-9;]*m/g, '');
@@ -235,6 +252,105 @@ export async function startBlog() {
 }
 
 /**
+ * 找出手上这个 Astro 博客的进程号
+ *
+ * ⚠️ 这里为什么不用 netstat 查 4321 端口？（2026-10-07 实测推翻了原方案）
+ *    两个原因叠加，导致"查端口"这条路根本走不通：
+ *      ① Astro 的 dev server 默认**只绑 IPv6 的 ::1**，不绑 IPv4
+ *         （见 isPortInUse 注释，也踩过 BUG-007）；
+ *      ② 即便绑了，`netstat -ano` 在这台机器上**压根不显示 4321 那一行**
+ *         —— 试了 127.0.0.1 / ::1 / 0.0.0.0 全都没有。
+ *
+ *    所以改成**按命令行认人**：Astro 进程的命令行长这样
+ *      "node" "D:\file\myblogweb\site\node_modules\.bin\..\astro\bin\astro.mjs" dev
+ *    拿它做匹配，既准确又不会误伤别的 node 程序。
+ *
+ * @returns {Promise<number|null>} 进程号；找不到就 null
+ */
+async function findAstroPid() {
+  try {
+    const json = await runCommand('powershell', [
+      '-NoProfile',
+      '-Command',
+      "Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'node.exe' } | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress",
+    ]);
+
+    if (!json || !json.trim()) return null;
+
+    let list;
+    try {
+      const parsed = JSON.parse(json);
+      list = Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      return null;
+    }
+
+    // 规范化站点路径，好做包含判断（大小写不敏感）
+    const siteKey = SITE_ROOT.toLowerCase();
+
+    const matches = [];
+    for (const p of list) {
+      const cl = String(p.CommandLine || '').toLowerCase();
+      if (!cl) continue;
+      // 必须同时提到 astro 和我们的 site 目录 —— 两个条件都满足才算我们的
+      const isAstro = cl.includes('astro');
+      const isOurSite = cl.includes(siteKey) || cl.includes(siteKey.replace(/\\/g, '\\\\'));
+      if (isAstro && isOurSite) {
+        const pid = Number.parseInt(p.ProcessId, 10);
+        if (Number.isInteger(pid) && pid > 0) matches.push(pid);
+      }
+    }
+
+    if (matches.length === 0) return null;
+
+    // 理论上只会有一个；万一有多个（残留进程），挑最小的那个（通常是较早起的）
+    matches.sort((a, b) => a - b);
+    return matches[0];
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 跑一个命令，把 stdout 收成字符串
+ *
+ * ⚠️ 必须用异步的 spawn，**不能用 spawnSync**（2026-10-07 实测）：
+ *    这台机器上 spawnSync 调任何外部命令都直接返回 EBUSY
+ *    （`spawnSync netstat EBUSY` / `spawnSync taskkill EBUSY`），
+ *    异步 spawn 则完全正常。同步版会让"关闭博客"永远失败。
+ */
+function runCommand(cmd, args) {
+  return new Promise((resolve) => {
+    let out = '';
+    let done = false;
+
+    const finish = (s) => {
+      if (done) return;
+      done = true;
+      resolve(s);
+    };
+
+    let child;
+    try {
+      child = spawn(cmd, args, { windowsHide: true });
+    } catch {
+      return finish('');
+    }
+
+    child.stdout?.on('data', (d) => { out += d.toString(); });
+    child.stderr?.on('data', () => { /* 错误信息用不上，忽略 */ });
+    child.on('error', () => finish(''));
+    child.on('close', () => finish(out));
+
+    // 兜底超时，免得命令卡住把请求挂死
+    setTimeout(() => {
+      try { child.kill(); } catch { /* 已经退了就算了 */ }
+      finish(out);
+    }, 10000);
+  });
+}
+
+/**
  * 状态查询：博客现在跑着没
  */
 export async function getBlogStatus() {
@@ -245,6 +361,174 @@ export async function getBlogStatus() {
     port: ASTRO_PORT,
     startedByTool: spawnedProcess !== null && !spawnedProcess.killed,
   };
+}
+
+// ---------------- 关闭 ----------------
+
+/**
+ * 关闭博客
+ *
+ * 策略（用户 2026-09-22 定）：先温柔、超时再强杀。
+ *
+ * 但"温柔"是有前提的 —— 得先**认准这个进程是我们的博客**，否则宁可不动。
+ * 认法分两级（B2 + B3）：
+ *   B2. 优先用启动时记下的进程号（内存 → 磁盘都找一遍）
+ *   B3. 进程号丢了，就回退到"谁占着 4321 端口"，且必须是 node 进程
+ *
+ * ⚠️ 绝对不能"看到端口占用就杀" —— 万一 4321 被别的程序占了，
+ *    那就是在杀别人的东西。查不到 / 不是 node → 直接报错收手。
+ *
+ * @returns {Promise<{ok: boolean, message: string, method?: string}>}
+ */
+export async function stopBlog() {
+  // ---- ① 真的没在跑？那没什么可关的 ----
+  if (!(await isBlogRunning())) {
+    clearPid();
+    return { ok: true, message: '博客本来就没在运行。' };
+  }
+
+  // ---- ② 找出目标进程号（B2：先看记录的）----
+  let pid = readPid();
+  let method = pid ? 'PID 记录' : '';
+
+  // 记录的进程号还活着吗？（可能早就退出了，只是文件没清）
+  if (pid && !(await isProcessAlive(pid))) {
+    pid = null;
+    method = '';
+    clearPid();
+  }
+
+  // ---- ③ 记录的没了 → B3：按命令行认人（findAstroPid）----
+  if (!pid) {
+    const found = await findAstroPid();
+
+    if (found === null) {
+      return {
+        ok: false,
+        message:
+          '博客页面确实在响应，但没能查出是哪个进程在跑。\n' +
+          '可能是权限不够。可以手动关掉那个黑窗口，或去任务管理器结束 node.exe。',
+      };
+    }
+
+    pid = found;
+    method = '命令行反查';
+  }
+
+  // ---- ④ 先温柔：请求它自己退出 ----
+  const gentleOk = await gracefulKill(pid);
+
+  if (gentleOk) {
+    clearPid();
+    spawnedProcess = null;
+    return {
+      ok: true,
+      method,
+      message: `博客已关闭（进程 ${pid}，已正常退出）。`,
+    };
+  }
+
+  // ---- ⑤ 温柔没成 → 强杀 ----
+  const forceOk = await forceKill(pid);
+
+  if (forceOk) {
+    clearPid();
+    spawnedProcess = null;
+    return {
+      ok: true,
+      method,
+      message: `博客已关闭（进程 ${pid}，温柔关闭超时后强制结束）。`,
+    };
+  }
+
+  return {
+    ok: false,
+    message: `尝试关闭进程 ${pid} 失败了。可以去任务管理器手动结束它。`,
+  };
+}
+
+/**
+ * 温柔关闭：请求它自己退出，等一会儿看它走不走。
+ *
+ * ⚠️ 关于"温柔"在 Windows 上的实情（2026-10-07 实测）：
+ *    taskkill **不带 /F** 发的是 WM_CLOSE，而我们的 node 是 windowsHide
+ *    起的、没有窗口 —— 收不到这个消息，所以实测总是走到"超时强杀"。
+ *    留着这一步的意义是：万一将来进程形态变了（比如换成有窗口的方式起），
+ *    它就能自动受益，不用改代码。代价只是多等几秒。
+ *
+ * @returns {Promise<boolean>} 是否在等待窗口内正常退出
+ */
+async function gracefulKill(pid) {
+  await runCommand('taskkill', ['/PID', String(pid)]);
+
+  const deadline = Date.now() + GRACEFUL_WAIT_MS;
+  while (Date.now() < deadline) {
+    if (!(await isProcessAlive(pid))) return true;
+    await sleep(250);
+  }
+
+  return !(await isProcessAlive(pid));
+}
+
+/**
+ * 强杀：taskkill /F /T
+ *
+ * /T 表示连子进程一起结束 —— npm run dev 会再起一个 node 子进程，
+ * 只杀父进程的话子进程会变成"孤儿"继续占着端口，等于没关掉。
+ */
+async function forceKill(pid) {
+  await runCommand('taskkill', ['/F', '/T', '/PID', String(pid)]);
+
+  // 给它一点时间真的退掉再判定
+  for (let i = 0; i < 10; i++) {
+    if (!(await isProcessAlive(pid))) return true;
+    await sleep(200);
+  }
+  return !(await isProcessAlive(pid));
+}
+
+// ---------------- 进程号记录 ----------------
+
+function savePid(pid) {
+  try {
+    fs.mkdirSync(path.dirname(BLOG_PID_FILE), { recursive: true });
+    fs.writeFileSync(BLOG_PID_FILE, String(pid), 'utf8');
+  } catch {
+    // 落盘失败不影响运行，内存里那份还在
+  }
+}
+
+function readPid() {
+  try {
+    const raw = fs.readFileSync(BLOG_PID_FILE, 'utf8').trim();
+    const n = Number.parseInt(raw, 10);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearPid() {
+  try {
+    fs.rmSync(BLOG_PID_FILE, { force: true });
+  } catch {
+    // 删不掉就算了
+  }
+}
+
+/** 这个进程号还活着吗？ */
+async function isProcessAlive(pid) {
+  try {
+    // 信号 0 不真的发信号，只做权限/存在性检查
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 function tail(text, lines = 25) {

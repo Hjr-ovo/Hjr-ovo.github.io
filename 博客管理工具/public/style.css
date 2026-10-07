@@ -192,6 +192,20 @@ body {
   border-color: var(--danger);
 }
 
+/* 「关闭博客」按钮：跟绿色系的主按钮区分开，一眼看出这是"停掉"的动作。
+ * 用描边而不是实心红 —— 它就在「打开博客」原来的位置，
+ * 实心红太重了，会显得整个顶栏都在报警。 */
+.btn-danger-ghost {
+  background: transparent;
+  border-color: #fca5a5;
+  color: var(--danger);
+}
+
+.btn-danger-ghost:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
+
 .btn-lg {
   font-size: 15px;
   padding: 9px 24px;

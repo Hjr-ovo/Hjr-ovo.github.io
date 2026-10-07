@@ -25,6 +25,11 @@ export const POSTS_DIR = path.join(SITE_ROOT, 'src', 'content', 'posts');
 // 删除文章的备份目录（落在 .workbuddy/ 里，已被 .gitignore 整块忽略）
 export const BACKUP_DIR = path.join(REPO_ROOT, '.workbuddy', 'tmp', 'deleted-posts');
 
+// 博客进程号的记录文件。
+// 作用：管理工具启动博客后把进程号写在这里，这样即使管理工具自己重启过，
+// 也还能找到那个博客进程并把它关掉（光靠内存记不住）。
+export const BLOG_PID_FILE = path.join(REPO_ROOT, '.workbuddy', 'tmp', 'blog.pid');
+
 // ---------------- 端口 ----------------
 
 // 工具自己的端口

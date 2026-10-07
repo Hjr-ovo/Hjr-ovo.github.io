@@ -15,7 +15,7 @@ import { TOOL_HOST, TOOL_PORT, TOOL_BASE_URL, TOOL_ROOT, CATEGORIES, POSTS_DIR, 
 import * as posts from './posts.mjs';
 import { slugify, validateSlug } from './slug.mjs';
 import { today } from './frontmatter.mjs';
-import { startBlog, getBlogStatus, openBrowser, isPortInUse } from './blog-server.mjs';
+import { startBlog, stopBlog, getBlogStatus, openBrowser, isPortInUse } from './blog-server.mjs';
 
 const PUBLIC_DIR = path.join(TOOL_ROOT, 'public');
 
@@ -147,6 +147,11 @@ async function handleApi(req, res, pathname, url) {
     const result = await startBlog();
     // 起来了就顺手打开浏览器
     if (result.ok) openBrowser(url.searchParams.get('open') === '0' ? '' : 'http://localhost:4321/');
+    return sendJson(res, 200, result);
+  }
+
+  if (pathname === '/api/blog/stop' && method === 'POST') {
+    const result = await stopBlog();
     return sendJson(res, 200, result);
   }
 

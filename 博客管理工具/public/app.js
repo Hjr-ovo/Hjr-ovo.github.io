@@ -104,26 +104,55 @@ async function loadMeta() {
 
 // ============ 博客状态 ============
 
+// 记住最近一次查到的状态，按钮据此决定"打开"还是"关闭"
+let blogRunning = false;
+
 async function refreshBlogStatus() {
   try {
     const res = await apiGet('/api/blog/status');
+    blogRunning = !!res.running;
+
     const el = $('blog-status');
-    if (res.running) {
+    if (blogRunning) {
       el.textContent = '博客运行中 :4321';
       el.className = 'status status-on';
     } else {
       el.textContent = '博客未启动';
       el.className = 'status status-off';
     }
+
+    renderBlogButton();
   } catch {
     /* 状态查不到不影响主流程 */
   }
 }
 
+// 一个按钮，两种形态：没跑时是「打开博客」，跑着时是「关闭博客」
+function renderBlogButton() {
+  const btn = $('btn-open-blog');
+  if (btn.dataset.busy === '1') return; // 正在启动/关闭中，别覆盖提示文字
+
+  if (blogRunning) {
+    btn.textContent = '关闭博客';
+    btn.className = 'btn btn-danger-ghost';
+    btn.title = '关掉本地博客，释放它占用的资源';
+  } else {
+    btn.textContent = '打开博客';
+    btn.className = 'btn btn-primary';
+    btn.title = '在本地启动博客并打开页面';
+  }
+}
+
+// 按钮点下去的分发：按当前状态决定是开还是关
+function toggleBlog() {
+  if (blogRunning) return closeBlog();
+  return openBlog();
+}
+
 async function openBlog() {
   const btn = $('btn-open-blog');
+  btn.dataset.busy = '1';
   btn.disabled = true;
-  const original = btn.textContent;
   btn.textContent = '启动中…';
 
   try {
@@ -138,9 +167,42 @@ async function openBlog() {
   } catch (err) {
     showModal('启动博客失败', String(err.message || err), { ok: false });
   } finally {
+    btn.dataset.busy = '';
     btn.disabled = false;
-    btn.textContent = original;
-    setTimeout(refreshBlogStatus, 1500);
+    await refreshBlogStatus();
+  }
+}
+
+async function closeBlog() {
+  const yes = await askModal(
+    '关闭本地博客？',
+    '关掉后博客页面就打不开了（浏览器标签页可以留着，刷新会失败）。\n\n' +
+      '想再看的时候，点一下「打开博客」重新启动即可。',
+    { danger: true, okText: '关闭博客', cancelText: '取消' }
+  );
+
+  if (!yes) return;
+
+  const btn = $('btn-open-blog');
+  btn.dataset.busy = '1';
+  btn.disabled = true;
+  btn.textContent = '关闭中…';
+
+  try {
+    const res = await apiPost('/api/blog/stop');
+    if (res.ok) {
+      toast('博客已关闭');
+    } else {
+      showModal('关闭博客失败', res.message, { ok: false });
+    }
+  } catch (err) {
+    showModal('关闭博客失败', String(err.message || err), { ok: false });
+  } finally {
+    btn.dataset.busy = '';
+    btn.disabled = false;
+    // 关完稍等一下再查状态（进程退出需要一点点时间）
+    setTimeout(refreshBlogStatus, 800);
+    await refreshBlogStatus();
   }
 }
 
@@ -713,7 +775,7 @@ async function quitTool() {
 
 function bindEvents() {
   // 顶栏
-  $('btn-open-blog').onclick = openBlog;
+  $('btn-open-blog').onclick = toggleBlog;
   $('btn-quit').onclick = quitTool;
 
   // 列表
