@@ -11,6 +11,10 @@
 
 import { SITE } from '../consts';
 import '../styles/global.css';
+// KaTeX 的样式表。数学公式的排版（分数线、根号、上下标的位置）全靠它，
+// 不引的话公式会退化成一堆歪斜的普通文字。
+// 放在 global.css 之后，这样我们自己的覆盖规则能生效。
+import 'katex/dist/katex.min.css';
 
 interface Props {
   title?: string;
