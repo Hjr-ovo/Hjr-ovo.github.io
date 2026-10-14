@@ -1,0 +1,43 @@
+---
+// 标签总览页：/tags/
+//
+// 列出站内所有标签，每张卡片显示：标签名、文章数。
+// 与分类总览页（categories/index.astro）的区别：
+//   - 分类是「一篇文章必属一个」，标签是「可有可无、可多个」
+//   - 标签数量通常远多于分类，所以用小一号的胶囊网格而不是大卡片
+//
+// 只统计「不是草稿」的文章，与首页口径一致。
+
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+
+const posts = await getCollection('posts', ({ data }) => !data.draft);
+
+// 标签 → 文章数。一篇文章的多个标签各计一次；
+// 同一标签在同一篇文章里重复出现只算一篇（用 Set 按文章去重）。
+const counts = new Map<string, number>();
+for (const post of posts) {
+  for (const tag of new Set(post.data.tags)) {
+    counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  }
+}
+
+// 转成数组：文章多的在前；数量相同按名称排，保证每次构建顺序一致
+const tags = [...counts.entries()]
+  .map(([name, count]) => ({ name, count }))
+  .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh-CN'));
+---
+
+<BaseLayout title="标签">
+  <h1>标签</h1>
+  <p class="page-desc">共 {tags.length} 个标签。点一个标签，看打过它的所有文章。</p>
+
+  <div class="tag-cloud">
+    {tags.map((tag) => (
+      <a class="tag tag-link" href={`/tags/${tag.name}/`}>
+        {tag.name}
+        <span class="tag-count">{tag.count}</span>
+      </a>
+    ))}
+  </div>
+</BaseLayout>

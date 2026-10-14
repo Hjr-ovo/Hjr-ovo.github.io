@@ -1,0 +1,83 @@
+---
+// 某一个标签下的文章列表：/tags/<标签名>/
+//
+// 与分类详情页（categories/[category].astro）同构，两处差别：
+//   1. 数据来源是 post.data.tags（数组），收集时要按标签展开
+//   2. 一篇文章可能有多个标签，但每个标签页里它只出现一次
+//
+// 标签名是中文（如「踩坑」），浏览器自动 URL 编码，Astro 正确解码，
+// 与分类页同一套机制，不需要自己处理转义。
+
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { formatDate, isoDate } from '../../utils/format-date';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('posts', ({ data }) => !data.draft);
+
+  // 标签 → 文章列表。同一标签在同一个文件里重复出现只收一次
+  const groups = new Map<string, typeof posts>();
+  for (const post of posts) {
+    for (const tag of new Set(post.data.tags)) {
+      if (!groups.has(tag)) groups.set(tag, []);
+      groups.get(tag)!.push(post);
+    }
+  }
+
+  return [...groups.entries()].map(([tag, list]) => ({
+    params: { tag },
+    props: {
+      // 按发布日期倒序，与首页、分类页口径一致
+      posts: list.sort(
+        (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+      ),
+    },
+  }));
+}
+
+const { posts } = Astro.props;
+const tag = Astro.params.tag;
+---
+
+<BaseLayout title={`标签：${tag}`}>
+  <a class="back-link" href="/tags/">← 所有标签</a>
+
+  <header class="page-head">
+    <h1>{tag}</h1>
+    <p class="post-meta">{posts.length} 篇文章</p>
+  </header>
+
+  <ul class="post-list">
+    {posts.map((post) => (
+      <li class="post-item">
+        <h2>
+          <a href={`/posts/${post.id}/`}>{post.data.title}</a>
+        </h2>
+
+        <p class="post-meta">
+          <time datetime={isoDate(post.data.pubDate)}>
+            {formatDate(post.data.pubDate)}
+          </time>
+          {post.data.updatedDate && (
+            <>
+              {' · 更新于 '}
+              <time datetime={isoDate(post.data.updatedDate)}>
+                {formatDate(post.data.updatedDate)}
+              </time>
+            </>
+          )}
+        </p>
+
+        <p class="post-desc">{post.data.description}</p>
+
+        <div class="tag-row">
+          {post.data.tags.map((t) => (
+            <a class={t === tag ? 'tag' : 'tag muted'} href={`/tags/${t}/`}>
+              {t}
+            </a>
+          ))}
+        </div>
+      </li>
+    ))}
+  </ul>
+</BaseLayout>

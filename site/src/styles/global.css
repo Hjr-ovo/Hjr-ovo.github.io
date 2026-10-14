@@ -475,6 +475,26 @@ article img {
   margin-bottom: 0.4rem;
 }
 
+/* 标签总览：小胶囊流式排布（标签比分类多，用云状布局不用大卡片） */
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 1.5rem 0;
+}
+
+.tag-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* 胶囊里的文章数角标：比标签名小一号、更淡 */
+.tag-count {
+  font-size: 0.72rem;
+  opacity: 0.65;
+}
+
 /* ---------- 返回链接 ---------- */
 
 .back-link {

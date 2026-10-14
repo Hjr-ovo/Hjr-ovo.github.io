@@ -54,7 +54,7 @@ const { Content } = await render(post);
           {post.data.category}
         </a>
         {post.data.tags.map((tag) => (
-          <span class="tag muted">{tag}</span>
+          <a class="tag muted" href={`/tags/${tag}/`}>{tag}</a>
         ))}
       </div>
     </header>
