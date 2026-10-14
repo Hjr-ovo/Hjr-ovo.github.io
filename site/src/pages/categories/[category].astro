@@ -1,0 +1,80 @@
+---
+// 某一个分类的文章列表：/categories/<分类名>/
+//
+// [category] 是动态路由：getStaticPaths 收集所有出现过的分类，
+// 每个分类生成一个独立页面。分类名是中文（如「计算机网络」），
+// 浏览器会自动做 URL 编码，Astro 生成与匹配时都会正确解码，
+// 不需要自己处理转义。
+//
+// 页面结构与首页的文章列表保持同一套样式（post-list），降低维护成本。
+
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { formatDate, isoDate } from '../../utils/format-date';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('posts', ({ data }) => !data.draft);
+
+  // 按分类分组
+  const groups = new Map<string, typeof posts>();
+  for (const post of posts) {
+    const c = post.data.category;
+    if (!groups.has(c)) groups.set(c, []);
+    groups.get(c)!.push(post);
+  }
+
+  return [...groups.entries()].map(([category, list]) => ({
+    params: { category },
+    props: {
+      // 同一个分类内按发布日期倒序，与首页口径一致
+      posts: list.sort(
+        (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+      ),
+    },
+  }));
+}
+
+const { posts } = Astro.props;
+const category = Astro.params.category;
+---
+
+<BaseLayout title={`分类：${category}`}>
+  <a class="back-link" href="/categories/">← 所有分类</a>
+
+  <header class="page-head">
+    <h1>{category}</h1>
+    <p class="post-meta">{posts.length} 篇文章</p>
+  </header>
+
+  <ul class="post-list">
+    {posts.map((post) => (
+      <li class="post-item">
+        <h2>
+          <a href={`/posts/${post.id}/`}>{post.data.title}</a>
+        </h2>
+
+        <p class="post-meta">
+          <time datetime={isoDate(post.data.pubDate)}>
+            {formatDate(post.data.pubDate)}
+          </time>
+          {post.data.updatedDate && (
+            <>
+              {' · 更新于 '}
+              <time datetime={isoDate(post.data.updatedDate)}>
+                {formatDate(post.data.updatedDate)}
+              </time>
+            </>
+          )}
+        </p>
+
+        <p class="post-desc">{post.data.description}</p>
+
+        <div class="tag-row">
+          {post.data.tags.map((tag) => (
+            <span class="tag muted">{tag}</span>
+          ))}
+        </div>
+      </li>
+    ))}
+  </ul>
+</BaseLayout>

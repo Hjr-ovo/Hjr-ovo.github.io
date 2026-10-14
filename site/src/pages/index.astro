@@ -58,7 +58,9 @@ const posts = (await getCollection('posts', ({ data }) => !data.draft)).sort(
           <p class="post-desc">{post.data.description}</p>
 
           <div class="tag-row">
-            <span class="tag">{post.data.category}</span>
+            <a class="tag" href={`/categories/${post.data.category}/`}>
+              {post.data.category}
+            </a>
             {post.data.tags.map((tag) => (
               <span class="tag muted">{tag}</span>
             ))}

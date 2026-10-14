@@ -413,6 +413,68 @@ article img {
   border-radius: 8px;
 }
 
+/* ---------- 分类页 ---------- */
+
+.page-desc {
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin-top: -0.5rem;
+}
+
+/* 分类总览：卡片网格，列宽自适应，窄屏自动减列 */
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.9rem;
+  margin: 1.5rem 0;
+}
+
+.cat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 1rem 1.1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  text-decoration: none;
+}
+
+.cat-card:hover {
+  border-color: var(--accent);
+}
+
+.cat-name {
+  font-weight: 500;
+  font-size: 1.02rem;
+  color: var(--ink);
+}
+
+.cat-card:hover .cat-name {
+  color: var(--accent);
+}
+
+.cat-count {
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+.cat-latest {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* 分类详情页页头：标题 + 文章数（不在 article 里，需单独给一点下边距） */
+.page-head {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.page-head h1 {
+  margin-bottom: 0.4rem;
+}
+
 /* ---------- 返回链接 ---------- */
 
 .back-link {

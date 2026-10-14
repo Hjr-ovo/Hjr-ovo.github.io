@@ -1,0 +1,52 @@
+---
+// 分类总览页：/categories/
+//
+// 列出站内所有分类，每个分类显示：名称、文章数、最近更新时间。
+// 点击卡片进入该分类的文章列表（见同目录 [category].astro）。
+//
+// 注意：这里只统计「不是草稿」的文章，和首页口径一致。
+
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { formatDate } from '../../utils/format-date';
+
+const posts = await getCollection('posts', ({ data }) => !data.draft);
+
+// 按分类分组（Map 保持插入顺序无妨，最后会重新排序）
+const groups = new Map<string, typeof posts>();
+for (const post of posts) {
+  const c = post.data.category;
+  if (!groups.has(c)) groups.set(c, []);
+  groups.get(c)!.push(post);
+}
+
+// 转成数组：分类名、文章数、最近发布日期。
+// 排序规则：文章多的在前；数量相同则最近更新的在前。
+const categories = [...groups.entries()]
+  .map(([name, list]) => ({
+    name,
+    count: list.length,
+    latest: list.reduce(
+      (m, p) => (p.data.pubDate > m ? p.data.pubDate : m),
+      list[0].data.pubDate,
+    ),
+  }))
+  .sort((a, b) => b.count - a.count || b.latest.valueOf() - a.latest.valueOf());
+---
+
+<BaseLayout title="分类">
+  <h1>分类</h1>
+  <p class="page-desc">
+    共 {categories.length} 个分类、{posts.length} 篇文章。
+  </p>
+
+  <div class="cat-grid">
+    {categories.map((cat) => (
+      <a class="cat-card" href={`/categories/${cat.name}/`}>
+        <span class="cat-name">{cat.name}</span>
+        <span class="cat-count">{cat.count} 篇</span>
+        <span class="cat-latest">最近更新 {formatDate(cat.latest)}</span>
+      </a>
+    ))}
+  </div>
+</BaseLayout>
