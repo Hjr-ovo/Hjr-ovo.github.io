@@ -565,6 +565,188 @@ body {
   flex: 1;
 }
 
+/* ============ 分类 / 标签总览（2026-10-14 新增） ============ */
+
+.tax-panel {
+  margin: 0 0 20px;
+  padding: 13px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.tax-group + .tax-group {
+  margin-top: 13px;
+  padding-top: 13px;
+  border-top: 1px dashed var(--border);
+}
+
+.tax-heading {
+  margin: 0 0 9px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.tax-tip {
+  margin-left: 7px;
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.tax-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+/* 一个分类/标签 = 一个胶囊。
+   左边主体是「筛选」按钮，右边小箭头是「去博客看」的链接 ——
+   做成两个独立元素，是因为链接不能被筛选按钮的点击吃掉。 */
+.tax-chip {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: #fff;
+  overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.tax-chip:hover {
+  border-color: var(--accent);
+}
+
+/* 当前正在筛选的那一个 */
+.tax-chip.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.tax-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 5px 4px 12px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.tax-chip.is-active .tax-chip-btn {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tax-count {
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: #f1f2f4;
+  color: var(--text-muted);
+}
+
+.tax-chip.is-active .tax-count {
+  background: #fff;
+  color: var(--accent);
+}
+
+.tax-chip-open {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 11px 0 8px;
+  border-left: 1px solid var(--border);
+  color: var(--text-faint);
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.tax-chip-open:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* 筛选状态条：点过分类/标签之后出现 */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 14px;
+  padding: 8px 13px;
+  background: var(--accent-soft);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.filter-text {
+  flex: 1;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 改名弹窗里的输入框 */
+#tax-new-name {
+  width: 100%;
+}
+
+/* 改名弹窗里的预览提示（会显示"影响多少篇 + 新旧地址"） */
+.tax-info {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  /* 提示是多行的，用 \n 分隔 —— 这里让换行真的生效 */
+  white-space: pre-line;
+  background: var(--accent-soft);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+}
+
+/* 合并、或名字不可用这类需要多看一眼的提示 */
+.tax-info.is-warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+  color: var(--warn-text);
+}
+
+/* 编辑页的标签快捷按钮 */
+.tag-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+
+.tag-suggest-label {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.tag-suggest-chip {
+  padding: 2px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.tag-suggest-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
 /* ============ 提示条 ============ */
 
 .banner {

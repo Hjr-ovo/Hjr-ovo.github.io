@@ -13,6 +13,7 @@ import path from 'node:path';
 
 import { TOOL_HOST, TOOL_PORT, TOOL_BASE_URL, TOOL_ROOT, CATEGORIES, POSTS_DIR, BACKUP_DIR } from './config.mjs';
 import * as posts from './posts.mjs';
+import * as taxonomy from './taxonomy.mjs';
 import { slugify, validateSlug } from './slug.mjs';
 import { today } from './frontmatter.mjs';
 import { startBlog, stopBlog, getBlogStatus, openBrowser, isPortInUse } from './blog-server.mjs';
@@ -158,6 +159,28 @@ async function handleApi(req, res, pathname, url) {
   if (pathname === '/api/blog/open' && method === 'POST') {
     const ok = openBrowser('http://localhost:4321/');
     return sendJson(res, 200, { ok, error: ok ? '' : '打开浏览器失败' });
+  }
+
+  // ---- 分类 / 标签：统计 ----
+  // 站点上已经能看到分类页和标签页了，这个接口让工具里也能看到同样一份数据：
+  // 有哪些分类/标签、各多少篇、其中几篇是草稿（草稿在站点上不显示）。
+  if (pathname === '/api/taxonomy' && method === 'GET') {
+    const data = await taxonomy.listTaxonomy();
+    return sendJson(res, 200, { ok: true, ...data });
+  }
+
+  // ---- 分类 / 标签：改名 / 合并 ----
+  // ⚠️ 分类名和标签名会进 URL，改名等于改地址，所以后端会顺手写一条重定向。
+  // dryRun:true 时只算不写，供界面先显示"会影响多少篇"。
+  if (pathname === '/api/taxonomy/rename' && method === 'POST') {
+    const body = await readJsonBody(req);
+    const result = await taxonomy.renameTaxonomy({
+      kind: body.kind,
+      from: body.from,
+      to: body.to,
+      dryRun: body.dryRun === true,
+    });
+    return sendJson(res, 200, { ok: true, ...result });
   }
 
   // ---- 元信息：分类清单、今天日期、路径 ----

@@ -82,6 +82,12 @@ export const BLOG_URL = `http://localhost:${ASTRO_PORT}/`;
 // 文章 URL 前缀。URL 结构是 /posts/<文件名>/，不带分类（ADR-006）
 export const POST_URL_PREFIX = '/posts/';
 
+// 分类页 / 标签页的 URL 前缀（2026-10-14 站点新增这两个页面）。
+// ⚠️ 分类名和标签名是**中文**，会直接进 URL（浏览器自动编码，Astro 正确解码）。
+//    这意味着「改分类名 = 改 URL = 旧分类页失效」，所以改名时要写重定向。
+export const CATEGORY_URL_PREFIX = '/categories/';
+export const TAG_URL_PREFIX = '/tags/';
+
 // ---------------- 分类清单 ----------------
 
 // 起步主题清单，来自 需求与目标.md「分类体系」一节。

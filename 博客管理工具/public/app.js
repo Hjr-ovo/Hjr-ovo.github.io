@@ -10,6 +10,18 @@
 const state = {
   posts: [],
   meta: { categories: [], today: '', postsDir: '' },
+
+  // 分类 / 标签的统计（来自 /api/taxonomy）。
+  // 站点上已经有分类页和标签页了，这里拿的是同一份数据，
+  // 用来做总览、筛选，以及给填写表单时提供"实际用过的值"。
+  taxonomy: { categories: [], tags: [], postCount: 0, draftCount: 0, unparsed: [] },
+
+  // 当前的筛选条件：{ kind: 'category' | 'tag', name: string }，null = 不筛
+  filter: null,
+
+  // 改名弹窗的上下文：{ kind, from }
+  taxEdit: null,
+
   // 当前编辑的文章：null = 新建
   editing: null,
   // 打开的原始标题（用于判断"标题变了没"）
@@ -18,6 +30,9 @@ const state = {
   // 正文是否有未保存改动
   dirty: false,
 };
+
+// 博客站点的地址 —— 「去博客看」的分类页/标签页链接要用它
+const BLOG_BASE = 'http://localhost:4321';
 
 // ============ DOM 快捷方式 ============
 
@@ -77,6 +92,7 @@ async function boot() {
   await loadMeta();
   await refreshBlogStatus();
   await loadPosts();
+  await loadTaxonomy(); // 分类/标签统计（失败不影响主流程）
   bindEvents();
 
   // 每 8 秒看一次博客状态，让状态灯是活的
@@ -89,17 +105,34 @@ async function loadMeta() {
 
   state.meta = res;
 
-  // 分类下拉
-  const dl = $('category-list');
-  dl.innerHTML = '';
-  for (const c of res.categories) {
-    const opt = document.createElement('option');
-    opt.value = c;
-    dl.appendChild(opt);
-  }
+  // 分类候选要等 taxonomy 拿到之后才能填完整（见 fillCategoryOptions）
+  fillCategoryOptions();
 
   // 提示文章目录（让你知道工具在操作哪儿）
   $('posts-dir-hint').textContent = '文章目录：' + res.postsDir;
+}
+
+async function loadTaxonomy() {
+  try {
+    const res = await apiGet('/api/taxonomy');
+    if (!res.ok) return;
+
+    state.taxonomy = res;
+
+    renderTaxonomy();
+    renderFilterBar();
+    renderTagSuggest();
+
+    // 分类候选要更新 —— 文章里实际用过的分类才最可能是你想选的
+    fillCategoryOptions();
+
+    // 格式有问题的文章单独提醒一下（它们没被统计进去）
+    if (res.unparsed && res.unparsed.length > 0) {
+      console.warn('有文章没能解析，未计入分类标签统计：', res.unparsed);
+    }
+  } catch {
+    /* 统计拿不到不影响发文章 */
+  }
 }
 
 // ============ 博客状态 ============
@@ -230,13 +263,31 @@ function renderList() {
   const ul = $('post-list');
   ul.innerHTML = '';
 
-  const posts = state.posts;
-  $('post-count').textContent = posts.length > 0 ? `共 ${posts.length} 篇` : '';
+  const all = state.posts;
+  // 有筛选条件时只渲染匹配的那些（见 filteredPosts）
+  const posts = filteredPosts();
+
+  // 计数：筛选时显示「显示 x / 共 y 篇」，一眼看出被筛掉了多少
+  if (state.filter) {
+    $('post-count').textContent =
+      all.length > 0 ? `显示 ${posts.length} / 共 ${all.length} 篇` : '';
+  } else {
+    $('post-count').textContent = all.length > 0 ? `共 ${all.length} 篇` : '';
+  }
 
   if (posts.length === 0) {
-    $('list-empty').hidden = false;
+    const emptyEl = $('list-empty');
+    if (all.length > 0 && state.filter) {
+      const label = state.filter.kind === 'category' ? '分类' : '标签';
+      emptyEl.textContent = `${label}「${state.filter.name}」下没有文章。`;
+    } else {
+      emptyEl.textContent = '还没有文章。点右上角「新建文章」发第一篇。';
+    }
+    emptyEl.hidden = false;
     return;
   }
+
+  $('list-empty').hidden = true;
 
   for (const post of posts) {
     const li = document.createElement('li');
@@ -321,6 +372,401 @@ function renderList() {
 
     li.appendChild(actions);
     ul.appendChild(li);
+  }
+}
+
+// ============ 分类 / 标签（总览 · 筛选 · 改名） ============
+
+// ---- 筛选 ----
+
+// 按当前筛选条件过滤文章；没有筛选就返回全部
+function filteredPosts() {
+  const posts = state.posts;
+  if (!state.filter) return posts;
+
+  const { kind, name } = state.filter;
+
+  if (kind === 'category') {
+    return posts.filter((p) => String(p.category || '').trim() === name);
+  }
+
+  return posts.filter((p) => (p.tags || []).some((t) => String(t).trim() === name));
+}
+
+// 点一下筛选，再点一下取消
+function toggleFilter(kind, name) {
+  if (state.filter && state.filter.kind === kind && state.filter.name === name) {
+    state.filter = null;
+  } else {
+    state.filter = { kind, name };
+  }
+  afterFilterChange();
+}
+
+function clearFilter() {
+  state.filter = null;
+  afterFilterChange();
+}
+
+function afterFilterChange() {
+  renderTaxonomy(); // 高亮被选中的那个胶囊
+  renderFilterBar();
+  renderList();
+
+  // 滚回顶部，不然筛完停在页面中间、看不见列表变了
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderFilterBar() {
+  const bar = $('filter-bar');
+
+  if (!state.filter) {
+    bar.hidden = true;
+    return;
+  }
+
+  const label = state.filter.kind === 'category' ? '分类' : '标签';
+  const matched = filteredPosts().length;
+
+  $('filter-text').textContent = `${label}「${state.filter.name}」 —— ${matched} 篇`;
+  bar.hidden = false;
+}
+
+// ---- 总览 ----
+
+function renderTaxonomy() {
+  const cats = state.taxonomy.categories || [];
+  const tags = state.taxonomy.tags || [];
+
+  // 一篇都还没写的时候，没必要摆一个空面板
+  if (cats.length === 0 && tags.length === 0) {
+    $('tax-panel').hidden = true;
+    return;
+  }
+
+  $('tax-panel').hidden = false;
+  renderChips('tax-categories', 'category', cats);
+  renderChips('tax-tags', 'tag', tags);
+}
+
+function renderChips(boxId, kind, items) {
+  const box = $(boxId);
+  box.innerHTML = '';
+
+  if (items.length === 0) {
+    const empty = document.createElement('span');
+    empty.className = 'tax-tip';
+    empty.textContent = kind === 'category' ? '还没有分类' : '还没有标签';
+    box.appendChild(empty);
+    return;
+  }
+
+  for (const item of items) box.appendChild(makeChip(kind, item));
+}
+
+// 一个胶囊 = 左边「筛选」按钮 + 右边「去博客看」链接
+function makeChip(kind, item) {
+  const label = kind === 'category' ? '分类' : '标签';
+  const chip = document.createElement('span');
+  chip.className = 'tax-chip';
+
+  const isActive =
+    state.filter && state.filter.kind === kind && state.filter.name === item.name;
+  if (isActive) chip.classList.add('is-active');
+
+  // 主体：点了筛选
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'tax-chip-btn';
+  btn.title = isActive ? '再点一下取消筛选' : `只看这个${label}的文章`;
+
+  const name = document.createElement('span');
+  name.textContent = item.name;
+  btn.appendChild(name);
+
+  const count = document.createElement('span');
+  count.className = 'tax-count';
+  count.textContent = String(item.count);
+  // 草稿在站点上不显示，但工具里要看得到 —— 鼠标停上去说清楚
+  if (item.draftCount > 0) {
+    count.title =
+      `共 ${item.count} 篇，其中 ${item.draftCount} 篇是草稿` +
+      `（站点上只显示 ${item.count - item.draftCount} 篇）`;
+  }
+  btn.appendChild(count);
+
+  btn.onclick = () => toggleFilter(kind, item.name);
+  chip.appendChild(btn);
+
+  // 右侧：去博客里看读者的实际效果
+  const open = document.createElement('a');
+  open.className = 'tax-chip-open';
+  open.textContent = '↗';
+  open.title = `在博客里打开「${item.name}」的${label}页`;
+  open.href = taxonomyUrl(kind, item.name);
+  open.target = '_blank';
+  open.rel = 'noopener';
+  chip.appendChild(open);
+
+  return chip;
+}
+
+function taxonomyUrl(kind, name) {
+  const prefix = kind === 'category' ? '/categories/' : '/tags/';
+  return `${BLOG_BASE}${prefix}${encodeURIComponent(name)}/`;
+}
+
+// ---- 填写表单时复用已有的分类 / 标签 ----
+
+// 分类候选：把「文章里实际用过的」排在前面，预设清单里还没用过的接在后面。
+// 最常用的一定能直接选到；预设清单也不至于被埋掉，新分类仍可手填。
+function fillCategoryOptions() {
+  const dl = $('category-list');
+  if (!dl) return;
+
+  const used = (state.taxonomy.categories || []).map((c) => c.name);
+  const presets = state.meta.categories || [];
+  const ordered = [...used, ...presets.filter((c) => !used.includes(c))];
+
+  dl.innerHTML = '';
+  for (const name of ordered) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    dl.appendChild(opt);
+  }
+}
+
+// 标签快捷按钮：点一下就加进输入框。
+// 手打容易出现「npm」和「NPM」这种碎片，站点上就会多出一个只有一篇的标签页。
+function renderTagSuggest() {
+  const box = $('tag-suggest');
+  if (!box) return;
+
+  const tags = state.taxonomy.tags || [];
+  if (tags.length === 0) {
+    box.hidden = true;
+    return;
+  }
+
+  box.innerHTML = '';
+
+  const label = document.createElement('span');
+  label.className = 'tag-suggest-label';
+  label.textContent = '点一下加进去：';
+  box.appendChild(label);
+
+  for (const t of tags) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tag-suggest-chip';
+    btn.textContent = t.name;
+    btn.title = `已有 ${t.count} 篇用过这个标签`;
+    btn.onclick = () => addTagToInput(t.name);
+    box.appendChild(btn);
+  }
+
+  box.hidden = false;
+}
+
+function addTagToInput(name) {
+  const el = $('f-tags');
+  const current = el.value
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s !== '');
+
+  if (current.includes(name)) {
+    toast('已经有「' + name + '」了');
+    return;
+  }
+
+  current.push(name);
+  el.value = current.join(', ');
+  state.dirty = true;
+}
+
+// ---- 改名 / 合并 ----
+
+// 入口：筛选状态下点「改名 / 合并…」
+function openTaxEdit() {
+  if (!state.filter) return;
+  openTaxModal(state.filter.kind, state.filter.name);
+}
+
+let taxPreviewTimer = null;
+
+function openTaxModal(kind, from) {
+  const label = kind === 'category' ? '分类' : '标签';
+
+  const item = (kind === 'category' ? state.taxonomy.categories : state.taxonomy.tags).find(
+    (x) => x.name === from,
+  );
+  const count = item ? item.count : 0;
+
+  $('tax-modal-title').textContent = `改${label}名（或合并到别的${label}）`;
+  $('tax-modal-desc').textContent =
+    `「${from}」现在有 ${count} 篇文章，改了名字这些文章会一起跟着改。`;
+
+  const input = $('tax-new-name');
+  input.value = from;
+
+  const info = $('tax-modal-info');
+  info.hidden = true;
+  info.className = 'tax-info';
+  info.textContent = '';
+
+  // 名字还没改，按钮先禁用 —— 别让用户点了个"名字没变"的确定
+  $('tax-ok').disabled = true;
+
+  state.taxEdit = { kind, from };
+
+  $('tax-modal').hidden = false;
+  input.focus();
+  input.select();
+}
+
+function closeTaxModal() {
+  clearTimeout(taxPreviewTimer);
+  $('tax-modal').hidden = true;
+  state.taxEdit = null;
+}
+
+// 输入新名字后延迟一下，去问后端「这一改会影响多少篇」（dryRun，不写文件）。
+// 延迟是为了别每敲一个字就打一次接口。
+function onTaxNameInput() {
+  clearTimeout(taxPreviewTimer);
+  taxPreviewTimer = setTimeout(previewTaxRename, 320);
+}
+
+async function previewTaxRename() {
+  const ctx = state.taxEdit;
+  if (!ctx) return;
+
+  const info = $('tax-modal-info');
+  const okBtn = $('tax-ok');
+  const to = $('tax-new-name').value.trim();
+  const label = ctx.kind === 'category' ? '分类' : '标签';
+
+  if (!to) {
+    info.hidden = true;
+    okBtn.disabled = true;
+    return;
+  }
+
+  if (to === ctx.from) {
+    info.className = 'tax-info';
+    info.textContent = '名字没变。改一个不一样的，或者点取消。';
+    info.hidden = false;
+    okBtn.disabled = true;
+    return;
+  }
+
+  try {
+    const res = await apiPost('/api/taxonomy/rename', {
+      kind: ctx.kind,
+      from: ctx.from,
+      to,
+      dryRun: true,
+    });
+
+    if (!res.ok) {
+      info.className = 'tax-info is-warn';
+      info.textContent = res.error || '这个新名字不能用';
+      info.hidden = false;
+      okBtn.disabled = true;
+      return;
+    }
+
+    const lines = [];
+
+    if (res.isMerge) {
+      lines.push(`⚠️ 「${to}」已经存在，所以这次是合并：`);
+      lines.push(`两边共 ${res.affectedCount} 篇文章会归到「${to}」下面。`);
+    } else {
+      lines.push(`会把 ${res.affectedCount} 篇文章的${label}改成「${to}」。`);
+    }
+
+    lines.push('');
+    lines.push(`旧地址：${res.oldUrl}`);
+    lines.push(`新地址：${res.newUrl}`);
+    lines.push('工具会自动补一条跳转，别人收藏的旧地址不会失效。');
+
+    info.className = res.isMerge ? 'tax-info is-warn' : 'tax-info';
+    info.textContent = lines.join('\n');
+    info.hidden = false;
+    okBtn.disabled = false;
+  } catch (err) {
+    info.className = 'tax-info is-warn';
+    info.textContent = String(err.message || err);
+    info.hidden = false;
+    okBtn.disabled = true;
+  }
+}
+
+async function runTaxRename() {
+  const ctx = state.taxEdit;
+  if (!ctx) return;
+
+  const to = $('tax-new-name').value.trim();
+  if (!to) return;
+
+  const okBtn = $('tax-ok');
+  okBtn.disabled = true;
+  okBtn.textContent = '处理中…';
+
+  try {
+    const res = await apiPost('/api/taxonomy/rename', {
+      kind: ctx.kind,
+      from: ctx.from,
+      to,
+    });
+
+    if (!res.ok) {
+      showModal('改名失败', res.error || '未知错误', { ok: false });
+      return;
+    }
+
+    const label = ctx.kind === 'category' ? '分类' : '标签';
+    const succeeded = res.changed ? res.changed.length : 0;
+
+    let msg = res.isMerge
+      ? `已合并：${succeeded} 篇文章的${label}归到了「${res.to}」。`
+      : `已改名：${succeeded} 篇文章的${label}改成了「${res.to}」。`;
+
+    if (res.redirectAdded) {
+      msg += `\n\n旧地址会自动跳转：\n${res.oldUrl}\n  → ${res.newUrl}`;
+    } else if (res.redirectError) {
+      msg +=
+        `\n\n⚠️ 旧地址的跳转没能记上：\n${res.redirectError}` +
+        '\n（文章本身已经改好了，但旧链接会 404）';
+    }
+
+    if (res.failed && res.failed.length > 0) {
+      msg += `\n\n⚠️ 有 ${res.failed.length} 篇没能改成功：`;
+      for (const f of res.failed.slice(0, 5)) {
+        msg += `\n· ${f.slug}：${f.error}`;
+      }
+      if (res.failed.length > 5) msg += `\n…还有 ${res.failed.length - 5} 篇`;
+    }
+
+    msg += `\n\n原文都备份在：\n${res.backupDir}`;
+
+    closeTaxModal();
+
+    // 被改掉的那个名字已经不存在了，筛选条件跟着清掉
+    if (state.filter && state.filter.kind === ctx.kind && state.filter.name === ctx.from) {
+      state.filter = null;
+    }
+
+    await loadPosts();
+    await loadTaxonomy();
+
+    showModal(res.isMerge ? '合并完成' : '改名完成', msg, { ok: false });
+  } catch (err) {
+    showModal('改名出错', String(err.message || err), { ok: false });
+  } finally {
+    okBtn.disabled = false;
+    okBtn.textContent = '确定改名';
   }
 }
 
@@ -804,6 +1250,13 @@ function bindEvents() {
   // 列表
   $('btn-new').onclick = newPost;
 
+  // 分类 / 标签（总览 + 筛选 + 改名）
+  $('btn-filter-clear').onclick = clearFilter;
+  $('btn-tax-edit').onclick = openTaxEdit;
+  $('tax-cancel').onclick = closeTaxModal;
+  $('tax-ok').onclick = runTaxRename;
+  $('tax-new-name').addEventListener('input', onTaxNameInput);
+
   // 编辑页
   $('btn-back').onclick = async () => {
     if (state.dirty && !confirm('有改动还没保存，确定返回吗？')) return;
@@ -902,6 +1355,7 @@ function bindEvents() {
     if (e.key === 'Escape') {
       if (!$('modal').hidden) $('modal-cancel').click();
       else if (!$('rename-modal').hidden) $('rm-keep').click();
+      else if (!$('tax-modal').hidden) closeTaxModal();
     }
   });
 

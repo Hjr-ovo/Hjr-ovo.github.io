@@ -4,6 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>博客管理工具</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="stylesheet" href="/style.css" />
   </head>
 
@@ -30,6 +32,32 @@
         </div>
 
         <p id="posts-dir-hint" class="hint"></p>
+
+        <!-- 分类 / 标签总览（2026-10-14 新增）
+             站点上已经有分类页和标签页了，这里把同一份数据换个用法：
+             点一下就筛选下面的文章列表，方便按主题找文章。 -->
+        <div id="tax-panel" class="tax-panel" hidden>
+          <div class="tax-group">
+            <h3 class="tax-heading">
+              分类 <span class="tax-tip">点一个，只看该分类的文章</span>
+            </h3>
+            <div id="tax-categories" class="tax-chips"></div>
+          </div>
+
+          <div class="tax-group">
+            <h3 class="tax-heading">
+              标签 <span class="tax-tip">点一个，只看打过该标签的文章</span>
+            </h3>
+            <div id="tax-tags" class="tax-chips"></div>
+          </div>
+        </div>
+
+        <!-- 筛选状态条：点过分类/标签之后出现 -->
+        <div id="filter-bar" class="filter-bar" hidden>
+          <span id="filter-text" class="filter-text"></span>
+          <button id="btn-tax-edit" class="btn btn-tiny" type="button">改名 / 合并…</button>
+          <button id="btn-filter-clear" class="btn btn-tiny" type="button">× 取消筛选</button>
+        </div>
 
         <div id="list-loading" class="placeholder">读取中…</div>
         <div id="list-empty" class="placeholder" hidden>
@@ -85,6 +113,10 @@
             <input id="f-tags" type="text" placeholder="用逗号分隔，例：npm, Windows, 踩坑" />
           </label>
 
+          <!-- 已用过的标签，点一下直接加进输入框（2026-10-14 新增）：
+               手打容易出「npm」和「NPM」这种碎片，站点上就会多出只有一篇的标签页 -->
+          <div id="tag-suggest" class="tag-suggest" hidden></div>
+
           <label class="field field-check">
             <input id="f-draft" type="checkbox" />
             <span>存为草稿（不显示在博客上，只自己看）</span>
@@ -111,11 +143,15 @@
           <p id="slug-warning" class="warn" hidden></p>
 
           <details id="rename-box" class="rename-box" hidden>
-            <summary>改名会让旧链接失效 —— 点这里看说明</summary>
+            <summary>改名会换 URL —— 点这里看说明</summary>
             <p>
-              文件名的变化就是 URL 的变化。博客上线后，改名字会让别人收藏的旧链接、外站的引用全部失效（404）。
-              <strong>现在还没上线，所以改名的代价是 0。</strong>
-              工具不会自动帮你把旧链接跳转到新地址 —— 那个要等上线时再做。
+              文件名的变化就是 URL 的变化。已经发出去的文章一旦改名，
+              别人收藏的旧链接、外站的引用都会指向旧地址。
+            </p>
+            <p>
+              <strong>工具会自动补一条跳转。</strong>
+              改名时顺手记进一张表，构建后访问旧地址的人会被自动送到新地址，不会看到 404。
+              旧文件也会同时备份一份。
             </p>
           </details>
         </fieldset>
@@ -182,6 +218,26 @@
         <div class="modal-actions">
           <button id="rm-keep" class="btn btn-primary">不改，只改标题</button>
           <button id="rm-change" class="btn btn-ghost">顺便改成新的</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 分类/标签 改名合并弹窗 ============ -->
+    <div id="tax-modal" class="modal" hidden>
+      <div class="modal-card">
+        <h3 id="tax-modal-title">改名字</h3>
+        <p id="tax-modal-desc"></p>
+
+        <label class="field">
+          <span class="field-label">新名字 <em>必填</em></span>
+          <input id="tax-new-name" type="text" placeholder="填一个新的分类名或标签名" />
+        </label>
+
+        <div id="tax-modal-info" class="tax-info" hidden></div>
+
+        <div class="modal-actions">
+          <button id="tax-cancel" class="btn btn-ghost">取消</button>
+          <button id="tax-ok" class="btn btn-primary">确定改名</button>
         </div>
       </div>
     </div>
