@@ -84,7 +84,11 @@ def build_icon(size: int) -> Image.Image:
 # ---------------------------------------------------------------
 
 def _dib_bytes(im: Image.Image) -> bytes:
-    """BGRA、自底向上、biHeight 写两倍（上半像素图下半 AND 掩码）。"""
+    """BGRA、自底向上、biHeight 写两倍（上半 XOR 像素图、下半 AND 掩码）。
+
+    AND 掩码行必须真的写出来：只写一半数据 Pillow 读得出来（宽容），
+    Windows 按 biHeight=2h 解析会越界失败，图标显示为默认白图标。
+    """
     w, h = im.size
     header = struct.pack("<IiiHHIIiiII", 40, w, h * 2, 1, 32, 0, 0, 0, 0, 0, 0)
     px = im.convert("RGBA").load()
@@ -95,6 +99,9 @@ def _dib_bytes(im: Image.Image) -> bytes:
             r, g, b, a = px[x, y]
             row += bytes((b, g, r, a))
         rows.append(bytes(row))
+    and_stride = ((w + 31) // 32) * 4  # 1bpp 行按 4 字节对齐
+    for _ in range(h):
+        rows.append(bytes(and_stride))  # 全 0 掩码，h 行
     return header + b"".join(rows)
 
 
@@ -133,6 +140,43 @@ def save_png(im: Image.Image, path: str) -> None:
 # 验收：ICO 取帧必须与独立 PNG 逐像素一致
 # ---------------------------------------------------------------
 
+def check_ico_structure(ico_path: str, sizes) -> None:
+    """逐档验证数据块长度与目录项声明一致。
+
+    Pillow 读 ICO 很宽容（缺 AND 掩码也能读出来），Windows 不宽容——
+    必须按「目录项声明的字节数 == 实际数据块字节数」硬校验，
+    BMP 帧还要按 biHeight=2h 核对 40+像素行+掩码行 的总长。
+    """
+    with open(ico_path, "rb") as f:
+        data = f.read()
+    reserved, typ, count = struct.unpack("<HHH", data[:6])
+    assert reserved == 0 and typ == 1, "不是合法 ICO 头"
+    assert count == len(sizes), f"目录项数 {count} != {len(sizes)}"
+    off = 6
+    for i, size in enumerate(sizes):
+        w, h, _c, _r, _p, _b, bsize, boff = struct.unpack(
+            "<BBBBHHII", data[off:off + 16]
+        )
+        # ICO 目录项尺寸字段是 1 字节：256 装不下，规范约定写 0 表示 256
+        dw = 256 if w == 0 else w
+        dh = 256 if h == 0 else h
+        assert (dw, dh) == (size, size), f"第 {i} 档目录项尺寸 {dw}x{dh} != {size}"
+        assert boff + bsize <= len(data), f"第 {i} 档数据块越界"
+        blob = data[boff:boff + bsize]
+        if size >= 128:
+            assert blob[:8] == b"\x89PNG\r\n\x1a\n", f"{size}px 档应为 PNG 数据"
+        else:
+            bw, bh = struct.unpack("<ii", blob[4:12])
+            and_stride = ((bw + 31) // 32) * 4
+            expect = 40 + (bh // 2) * (bw * 4) + (bh // 2) * and_stride
+            assert bh == bw * 2, f"{size}px 档 biHeight={bh} 应为 {bw * 2}"
+            assert len(blob) == expect, (
+                f"{size}px DIB 长度 {len(blob)} != 声明 {expect}（缺 AND 掩码？）"
+            )
+        off += 16
+    print(f"[OK] {os.path.basename(ico_path)} 目录项与数据块结构一致（{len(sizes)} 档）")
+
+
 def verify_ico(ico_path: str, sizes) -> None:
     ico = Image.open(ico_path)
     for s in sizes:
@@ -156,15 +200,18 @@ def main() -> None:
     save_png(build_icon(180), os.path.join(SITE_PUBLIC, "apple-touch-icon.png"))
     save_png(build_icon(192), os.path.join(SITE_PUBLIC, "icon-192.png"))
     save_png(build_icon(512), os.path.join(SITE_PUBLIC, "icon-512.png"))
+    check_ico_structure(os.path.join(SITE_PUBLIC, "favicon.ico"), (16, 32, 48, 64))
     verify_ico(os.path.join(SITE_PUBLIC, "favicon.ico"), (16, 32, 48, 64))
 
     # ---- 管理工具（后台）----
     write_ico(os.path.join(TOOL_PUBLIC, "favicon.ico"), (16, 32, 48, 64))
     save_png(build_icon(64), os.path.join(TOOL_PUBLIC, "favicon.png"))
+    check_ico_structure(os.path.join(TOOL_PUBLIC, "favicon.ico"), (16, 32, 48, 64))
     verify_ico(os.path.join(TOOL_PUBLIC, "favicon.ico"), (16, 32, 48, 64))
 
     # ---- Windows 快捷方式大图标 ----
     write_ico(os.path.join(TOOL_DIR, "app.ico"), (16, 32, 48, 64, 128, 256))
+    check_ico_structure(os.path.join(TOOL_DIR, "app.ico"), (16, 32, 48, 64, 128, 256))
     verify_ico(os.path.join(TOOL_DIR, "app.ico"), (16, 32, 48, 64, 128, 256))
 
     print("全部图标生成完毕。")
