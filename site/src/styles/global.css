@@ -649,11 +649,92 @@ article img {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/* ---------- 搜索范围选项 ----------
+ * 样子做成胶囊，和标签云同一套视觉语言。
+ * 原生 checkbox 藏起来（opacity: 0 而不是 display: none —— 后者会让它
+ * 无法用 Tab 聚焦），点整个胶囊切换，键盘也照样能操作。
+ */
+.search-scopes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.9rem 0 0;
+  font-size: 0.85rem;
+}
+
+.search-scopes-label {
+  margin-right: 0.1rem;
+  color: var(--muted);
+}
+
+.scope {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.scope input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.scope span {
+  padding: 0.2rem 0.72rem;
+  line-height: 1.7;
+  color: var(--muted);
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.scope:hover span {
+  border-color: #bcd9cd;
+  color: var(--ink);
+}
+
+.scope input:checked + span {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: #bcd9cd;
+  font-weight: 500;
+}
+
+/* 键盘焦点必须看得见：藏了原生勾选框后，焦点环要自己画 */
+.scope input:focus-visible + span {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--accent);
+}
+
 .search-status {
   min-height: 1.5em;
-  margin: 0.5rem 0 1rem;
+  margin: 0.7rem 0 1rem;
   font-size: 0.88rem;
   color: var(--muted);
+}
+
+/* 命中来源徽标（标题 / 标签 / 正文） */
+.hit-badge {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0 0.42rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.75;
+  white-space: nowrap;
+  vertical-align: middle;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
 }
 
 /* 搜索结果里的摘要片段：保留 PageFind 的 <mark> 高亮，
@@ -668,5 +749,14 @@ article img {
   background: var(--accent-soft);
   color: var(--accent);
   padding: 0 0.1em;
+  border-radius: 2px;
+}
+
+/* 标题 / 标签命中时我们自己做的高亮，跟摘要里的 mark 保持同一配色，
+   别让浏览器默认的黄底在标题里跳出来 */
+.post-item h2 mark {
+  background: var(--accent-soft);
+  color: inherit;
+  padding: 0 0.08em;
   border-radius: 2px;
 }

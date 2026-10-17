@@ -3,20 +3,40 @@
 //
 // 索引不是 Astro 生成的，而是构建时由 PageFind 扫一遍 dist/ 产出
 // （见 package.json 的 build 脚本：astro build && pagefind --site dist）。
-// 所以这个页面只负责界面，真正干活的是运行时才加载的 /pagefind/pagefind.js。
+// 所以「正文」这条线只负责界面，真正干活的是运行时才加载的 /pagefind/pagefind.js。
 //
 // ⚠️ `npm run dev` 下没有 /pagefind/ 目录 —— 索引是构建产物，不是源码。
-// 页面会提示「先构建」，不报错；日常预览搜索请用 npm run build 后的站点。
+// 因此「正文」范围在开发模式下不可用，页面会如实提示；但标题 / 标签两个范围
+// 走的是下面这份构建时内联的轻量索引，开发模式一样能搜。
 //
-// 结果条目复用首页的卡片样式（.post-item），高亮片段用 PageFind 给的
-// excerpt（自带 <mark> 标签）。
+// 为什么标题 / 标签不交给 PageFind：
+//   PageFind 只索引 data-pagefind-body 里的正文文本，标题是 data-pagefind-meta、
+//   标签行是 data-pagefind-ignore，两者都**不参与全文检索**。想让它们可搜，
+//   只能单独准备一份数据 —— 文章数量就几十上百，内联 JSON 完全够用，
+//   而且能做精确的字段匹配（标题命中比正文里顺带出现一次要准得多）。
 
+import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
+import { formatDate } from '../utils/format-date';
+
+const posts = await getCollection('posts', ({ data }) => !data.draft);
+
+// 轻量索引：只放搜索要用的字段，不带正文（正文有 PageFind）
+const postIndex = posts.map((post) => ({
+  url: `/posts/${post.id}/`,
+  title: post.data.title,
+  description: post.data.description ?? '',
+  tags: post.data.tags ?? [],
+  category: post.data.category,
+  date: formatDate(post.data.pubDate),
+}));
 ---
 
 <BaseLayout title="搜索">
   <h1>搜索</h1>
-  <p class="page-desc">输入关键词，在全部文章里找。支持中英文和代码片段。</p>
+  <p class="page-desc">
+    输入关键词后在文章里找。可以只搜标题、只搜标签，也可以同时勾选几个范围。
+  </p>
 
   <div class="search-box">
     <input
@@ -29,16 +49,76 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     />
   </div>
 
+  <div class="search-scopes" role="group" aria-label="搜索范围">
+    <span class="search-scopes-label">搜索范围</span>
+    <label class="scope">
+      <input type="checkbox" name="scope" value="title" checked />
+      <span>标题</span>
+    </label>
+    <label class="scope">
+      <input type="checkbox" name="scope" value="tag" checked />
+      <span>标签</span>
+    </label>
+    <label class="scope">
+      <input type="checkbox" name="scope" value="body" checked />
+      <span>正文</span>
+    </label>
+  </div>
+
   <p id="search-status" class="search-status"></p>
   <ul id="search-results" class="post-list"></ul>
 </BaseLayout>
 
+{/* 轻量索引：脚本通过 id 读它。用 JSON 而不是 define:vars，
+    免得内容被塞进 JS 字符串还要二次转义。`<` 转义成 \u003c 是为了防止
+    标题里出现 </script> 提前结束标签。 */}
+<script
+  type="application/json"
+  id="post-index"
+  set:html={JSON.stringify(postIndex).replace(/</g, '\\u003c')}
+/>
+
 <script>
+  type Scope = 'title' | 'tag' | 'body';
+
+  const SCOPE_NAME: Record<Scope, string> = {
+    title: '标题',
+    tag: '标签',
+    body: '正文',
+  };
+
+  type PostMeta = {
+    url: string;
+    title: string;
+    description: string;
+    tags: string[];
+    category: string;
+    date: string;
+  };
+
+  type Hit = PostMeta & {
+    excerpt?: string;
+    matched: Scope[];
+    rank: number;
+  };
+
   const input = document.getElementById('search-input') as HTMLInputElement;
   const statusEl = document.getElementById('search-status') as HTMLElement;
   const resultsEl = document.getElementById('search-results') as HTMLElement;
+  const scopeInputs = Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[name="scope"]'),
+  );
 
-  // PageFind 的运行时对象。第一次搜索时才加载 —— 省得每个访客
+  const postIndex: PostMeta[] = JSON.parse(
+    document.getElementById('post-index')?.textContent || '[]',
+  );
+
+  // URL 归一化：去掉 query/hash 和结尾的斜杠，保证本地索引和
+  // PageFind 返回的 URL 能对上（PageFind 给的是 "/posts/xxx/"）
+  const keyOf = (url: string) =>
+    url.split('#')[0].split('?')[0].replace(/\/+$/, '');
+
+  // PageFind 的运行时对象。第一次需要正文搜索时才加载 —— 省得每个访客
   // 一进页面就拖一份搜索代码下来。
   let pagefind: any = null;
   let loadFailed = false;
@@ -66,72 +146,249 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     }
   }
 
+  function activeScopes(): Scope[] {
+    return scopeInputs
+      .filter((el) => el.checked)
+      .map((el) => el.value as Scope);
+  }
+
   function setStatus(text: string) {
     statusEl.textContent = text;
   }
 
-  function renderResults(items: any[]) {
+  /* ---------- 匹配与高亮 ---------- */
+
+  function escapeHtml(text: string) {
+    return text.replace(
+      /[&<>"']/g,
+      (ch) =>
+        ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        })[ch] as string,
+    );
+  }
+
+  // 空白分隔成多个词，全部命中才算匹配（AND）—— 中文没空格时整串就是一个词，
+  // 行为正好是「包含这个短语」
+  function tokenize(query: string) {
+    return query.toLowerCase().split(/\s+/).filter(Boolean);
+  }
+
+  const hasAll = (haystack: string, tokens: string[]) => {
+    const text = haystack.toLowerCase();
+    return tokens.every((token) => text.includes(token));
+  };
+
+  // 标题 / 标签命中的结果没有 PageFind 摘要，自己做一份关键词高亮
+  function highlight(text: string, tokens: string[]) {
+    const escaped = escapeHtml(text);
+    const pattern = tokens
+      .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .filter(Boolean)
+      .join('|');
+    if (!pattern) return escaped;
+    return escaped.replace(new RegExp(`(${pattern})`, 'gi'), '<mark>$1</mark>');
+  }
+
+  /* ---------- 渲染 ---------- */
+
+  function renderResults(hits: Hit[], tokens: string[]) {
     resultsEl.innerHTML = '';
-    for (const item of items) {
+
+    for (const hit of hits) {
       const li = document.createElement('li');
       li.className = 'post-item';
 
       const h2 = document.createElement('h2');
       const a = document.createElement('a');
-      a.href = item.url;
-      a.textContent = item.meta?.title ?? item.url;
+      a.href = hit.url;
+      a.innerHTML = tokens.length
+        ? highlight(hit.title, tokens)
+        : escapeHtml(hit.title);
       h2.appendChild(a);
+
+      // 命中来源徽标：让读者知道这篇是「标题里就有」还是「正文里提到」
+      for (const scope of hit.matched) {
+        const badge = document.createElement('span');
+        badge.className = 'hit-badge';
+        badge.textContent = SCOPE_NAME[scope];
+        h2.appendChild(badge);
+      }
 
       const p = document.createElement('p');
       p.className = 'search-excerpt';
-      // excerpt 由 PageFind 根据文章原文生成，自带 <mark> 高亮，
-      // 内容全部来自本站自己的 Markdown，可信。
-      p.innerHTML = item.excerpt;
+      if (hit.excerpt) {
+        // excerpt 由 PageFind 根据文章原文生成，自带 <mark> 高亮，
+        // 内容全部来自本站自己的 Markdown，可信。
+        p.innerHTML = hit.excerpt;
+      } else {
+        p.innerHTML = tokens.length
+          ? highlight(hit.description, tokens)
+          : escapeHtml(hit.description);
+      }
 
       li.appendChild(h2);
       li.appendChild(p);
+
+      if (hit.tags.length) {
+        const tagRow = document.createElement('div');
+        tagRow.className = 'tag-row';
+        const category = document.createElement('span');
+        category.className = 'tag';
+        category.textContent = hit.category;
+        tagRow.appendChild(category);
+        for (const tag of hit.tags) {
+          const chip = document.createElement('span');
+          // 标签命中的那个标签用主色，一眼能看出是哪命中
+          chip.className =
+            hit.matched.includes('tag') && hasAll(tag, tokens)
+              ? 'tag'
+              : 'tag muted';
+          chip.textContent = tag;
+          tagRow.appendChild(chip);
+        }
+        li.appendChild(tagRow);
+      }
+
       resultsEl.appendChild(li);
     }
   }
 
-  async function runSearch(query: string) {
-    const q = query.trim();
+  /* ---------- 搜索主流程 ---------- */
 
-    // 地址栏同步关键词：刷新/分享都能回到同一个搜索
+  // 连续输入会发起多次异步搜索，用序号丢弃过期结果
+  let searchSeq = 0;
+
+  async function runSearch(rawQuery: string) {
+    const seq = ++searchSeq;
+    const query = rawQuery.trim();
+    const scopes = activeScopes();
+
+    // 地址栏同步关键词和范围：刷新/分享都能回到同一次搜索
     const url = new URL(window.location.href);
-    if (q) url.searchParams.set('q', q);
+    if (query) url.searchParams.set('q', query);
     else url.searchParams.delete('q');
+    const allScopes = scopeInputs.length;
+    if (scopes.length && scopes.length < allScopes) {
+      url.searchParams.set('in', scopes.join(','));
+    } else {
+      url.searchParams.delete('in');
+    }
     history.replaceState(null, '', url);
 
-    if (!q) {
+    if (!query) {
       resultsEl.innerHTML = '';
-      setStatus('');
+      setStatus(scopes.length ? '' : '请至少选择一个搜索范围。');
       return;
     }
 
-    const pf = await loadPagefind();
-    if (!pf) {
-      setStatus('搜索索引还没生成：这个功能要在构建后的站点里用（开发模式没有索引）。');
-      return;
-    }
-
-    setStatus('搜索中…');
-    const search = await pf.search(q);
-
-    if (search.results.length === 0) {
+    if (!scopes.length) {
       resultsEl.innerHTML = '';
-      setStatus(`没有找到和「${q}」相关的文章。换个关键词试试？`);
+      setStatus('请至少选择一个搜索范围（标题 / 标签 / 正文）。');
       return;
     }
 
-    // 取前 20 条就够，再多读者也不会翻
-    const data = await Promise.all(
-      search.results.slice(0, 20).map((r: any) => r.data()),
-    );
+    const tokens = tokenize(query);
+    const hits = new Map<string, Hit>();
 
-    renderResults(data);
-    setStatus(`找到 ${search.results.length} 篇相关文章`);
+    // rank 越小越靠前：标题命中比标签命中准，标签比「正文里顺带提了一句」准
+    const RANK = { title: 0, tag: 1, body: 2 } as const;
+
+    function add(hit: Omit<Hit, 'matched' | 'rank'>, scope: Scope, rank: number) {
+      const key = keyOf(hit.url);
+      const existing = hits.get(key);
+      if (existing) {
+        if (!existing.matched.includes(scope)) existing.matched.push(scope);
+        existing.rank = Math.min(existing.rank, rank);
+        // 正文命中带来的摘要是更好的展示材料，优先用
+        if (!existing.excerpt && hit.excerpt) existing.excerpt = hit.excerpt;
+        return;
+      }
+      hits.set(key, { ...hit, matched: [scope], rank });
+    }
+
+    // ① 标题 / ② 标签：走内联索引，纯本地匹配，开发模式也能用
+    for (const post of postIndex) {
+      if (scopes.includes('title') && hasAll(post.title, tokens)) {
+        add({ ...post }, 'title', RANK.title);
+      }
+      if (
+        scopes.includes('tag') &&
+        post.tags.some((tag) => hasAll(tag, tokens))
+      ) {
+        add({ ...post }, 'tag', RANK.tag);
+      }
+    }
+
+    // ③ 正文：走 PageFind
+    let bodyUnavailable = false;
+    if (scopes.includes('body')) {
+      setStatus('搜索中…');
+      const pf = await loadPagefind();
+      if (!pf) {
+        bodyUnavailable = true;
+      } else {
+        const search = await pf.search(query);
+        // 取前 20 条就够，再多读者也不会翻
+        const data = await Promise.all(
+          search.results.slice(0, 20).map((r: any) => r.data()),
+        );
+        if (seq !== searchSeq) return;
+
+        data.forEach((item: any, i: number) => {
+          const meta = postIndex.find((p) => keyOf(p.url) === keyOf(item.url));
+          add(
+            {
+              url: item.url,
+              title: item.meta?.title ?? meta?.title ?? item.url,
+              description: meta?.description ?? '',
+              tags: meta?.tags ?? [],
+              category: meta?.category ?? '',
+              date: meta?.date ?? '',
+              excerpt: item.excerpt,
+            },
+            'body',
+            // 正文命中排在标题/标签之后，正文内部保持 PageFind 的相关度顺序
+            RANK.body + i * 0.001,
+          );
+        });
+      }
+    }
+
+    if (seq !== searchSeq) return;
+
+    // 标题 / 标签是纯字符串匹配，一个短词可能把所有文章都捞出来，
+    // 同样截前 20 条
+    const ordered = Array.from(hits.values())
+      .sort((a, b) => a.rank - b.rank)
+      .slice(0, 20);
+
+    if (!ordered.length) {
+      resultsEl.innerHTML = '';
+      const scopeText = scopes.map((s) => SCOPE_NAME[s]).join(' + ');
+      setStatus(
+        bodyUnavailable
+          ? `在「${scopeText}」里没有找到和「${query}」相关的文章。正文搜索需要构建后的站点，当前没生效，换构建后的地址再试。`
+          : `在「${scopeText}」里没有找到和「${query}」相关的文章。换个关键词或放宽范围试试？`,
+      );
+      return;
+    }
+
+    renderResults(ordered, tokens);
+
+    const scopeText = scopes.map((s) => SCOPE_NAME[s]).join(' + ');
+    let status = `在「${scopeText}」里找到 ${ordered.length} 篇相关文章`;
+    if (bodyUnavailable) {
+      status += '（正文索引未生成，本次只搜了标题和标签）';
+    }
+    setStatus(status);
   }
+
+  /* ---------- 交互 ---------- */
 
   // 输入防抖：每敲一个字都全量搜一次太浪费，停手 150ms 再搜
   let timer: number | undefined;
@@ -140,10 +397,21 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     timer = window.setTimeout(() => runSearch(input.value), 150);
   });
 
-  // 打开页面时如果地址栏带着 ?q=，直接按这个关键词搜
-  const initial = new URLSearchParams(window.location.search).get('q');
-  if (initial) {
-    input.value = initial;
-    runSearch(initial);
+  // 勾选/取消范围立刻重搜，不用等输入
+  for (const el of scopeInputs) {
+    el.addEventListener('change', () => runSearch(input.value));
+  }
+
+  // 打开页面时如果地址栏带着 ?q=（可能还带 ?in=），按它恢复现场
+  const params = new URLSearchParams(window.location.search);
+  const initialQuery = params.get('q');
+  const initialScopes = params.get('in');
+  if (initialScopes) {
+    const wanted = new Set(initialScopes.split(',').filter(Boolean));
+    for (const el of scopeInputs) el.checked = wanted.has(el.value);
+  }
+  if (initialQuery) {
+    input.value = initialQuery;
+    runSearch(initialQuery);
   }
 </script>
