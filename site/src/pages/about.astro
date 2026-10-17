@@ -1,0 +1,85 @@
+---
+// 关于页：/about/
+//
+// 这一页只有排版，文字全在 src/data/about.ts —— 想改介绍内容只改那个文件。
+// 页面里唯一的「活数据」是文章数 / 分类数 / 标签数：构建时从文章集合里现算，
+// 免得出现「关于页说 6 篇、首页其实 7 篇」这种对不上的情况。
+
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { SITE } from '../consts';
+import { ABOUT } from '../data/about';
+
+const posts = await getCollection('posts', ({ data }) => !data.draft);
+
+const stats = [
+  { num: posts.length, label: '篇文章' },
+  { num: new Set(posts.map((post) => post.data.category)).size, label: '个分类' },
+  { num: new Set(posts.flatMap((post) => post.data.tags)).size, label: '个标签' },
+];
+---
+
+<BaseLayout title="关于" description={`${ABOUT.name}：${ABOUT.tagline}`}>
+  <article class="about">
+    <header class="about-head">
+      <img
+        class="about-avatar"
+        src={SITE.avatar}
+        alt={ABOUT.name}
+        width="88"
+        height="88"
+      />
+      <div class="about-identity">
+        <h1>{ABOUT.name}</h1>
+        <p class="about-tagline">{ABOUT.tagline}</p>
+      </div>
+    </header>
+
+    <section class="about-section">
+      <h2>我在写什么</h2>
+      {ABOUT.intro.map((text) => <p>{text}</p>)}
+
+      <ul class="about-stats">
+        {stats.map((stat) => (
+          <li>
+            <span class="stat-num">{stat.num}</span>
+            <span class="stat-label">{stat.label}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+
+    <section class="about-section">
+      <h2>最近在折腾</h2>
+      <ul class="about-list">
+        {ABOUT.doing.map((text) => <li>{text}</li>)}
+      </ul>
+    </section>
+
+    <section class="about-section">
+      <h2>常用</h2>
+      <div class="tag-row">
+        {ABOUT.tools.map((tool) => <span class="tag muted">{tool}</span>)}
+      </div>
+    </section>
+
+    <section class="about-section">
+      <h2>关于本站</h2>
+      {ABOUT.siteNotes.map((text) => <p>{text}</p>)}
+    </section>
+
+    <section class="about-section">
+      <h2>联系</h2>
+      <p>发现问题、想指正某篇写错的地方，都可以来找我。</p>
+      <ul class="about-links">
+        {ABOUT.links.map((link) => (
+          <li>
+            <a href={link.href} target="_blank" rel="noopener">
+              {link.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  </article>
+</BaseLayout>

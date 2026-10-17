@@ -664,6 +664,138 @@ article img {
   color: var(--muted);
 }
 
+/* ---------- 关于页 ----------
+ *
+ * 结构比文章页简单：身份区 + 几段文字 + 一行统计 + 一排工具胶囊。
+ * 刻意不做得花哨 —— 关于页是「补一句你是谁」，不是作品集。
+ */
+
+.about-head {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-bottom: 2.5rem;
+}
+
+.about-avatar {
+  width: 88px;
+  height: 88px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--bg-card);
+}
+
+.about-identity h1 {
+  margin: 0 0 0.3rem;
+}
+
+.about-tagline {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.about-section {
+  margin-top: 2.6rem;
+}
+
+.about-section h2 {
+  margin: 0 0 0.8rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+/* 「N 篇文章 / 个分类 / 个标签」三块小卡片 */
+.about-stats {
+  list-style: none;
+  padding: 0;
+  margin: 1.6rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.about-stats li {
+  flex: 1 1 0;
+  min-width: 6.5rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  text-align: center;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.stat-num {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--accent);
+}
+
+.stat-label {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* 「最近在折腾」：小圆点列表，比默认的实心圆点轻一点 */
+.about-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.about-list li {
+  position: relative;
+  margin: 0 0 0.55rem;
+  padding-left: 1.1rem;
+}
+
+.about-list li::before {
+  content: '';
+  position: absolute;
+  left: 0.15rem;
+  top: 0.75em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.6;
+}
+
+/* 联系：一排描边胶囊，和标签胶囊区分开（标签是实心底，这里是描边） */
+.about-links {
+  list-style: none;
+  padding: 0;
+  margin: 0.9rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.about-links li {
+  margin: 0;
+}
+
+.about-links a {
+  display: inline-block;
+  padding: 0.32rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-card);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.about-links a:hover {
+  border-color: var(--line-strong);
+  color: var(--accent);
+}
+
 /* ---------- 分类页 ---------- */
 
 .page-desc {
