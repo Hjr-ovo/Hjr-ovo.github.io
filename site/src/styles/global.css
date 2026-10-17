@@ -892,6 +892,89 @@ article img {
   color: var(--accent);
 }
 
+/* ---------- 首页底部「查看更多历史文章」 ---------- */
+
+/* 它是首页的出口，不是文章卡片：用描边胶囊而不是卡片，避免被当成「第 11 篇文章」 */
+.more-posts {
+  margin-top: 2.5rem;
+  text-align: center;
+}
+
+.more-link {
+  display: inline-block;
+  padding: 0.6rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--ink);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.more-link:hover {
+  border-color: var(--line-strong);
+  color: var(--accent);
+}
+
+.more-hint {
+  margin: 0.65rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* ---------- 归档页 /posts/ ---------- */
+
+.archive-year {
+  margin-top: 2.25rem;
+}
+
+/* 年份是分隔符不是内容，压低存在感：小字、灰色、只留一条细线 */
+.archive-year-title {
+  margin: 0 0 0.25rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.archive-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* 一行 = 月日 + 标题 + 分类。日期等宽数字，标题长短不一时右端才对得齐 */
+.archive-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+}
+
+.archive-date {
+  flex: 0 0 auto;
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.archive-link {
+  flex: 1 1 auto;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.archive-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.archive-item .tag {
+  flex: 0 0 auto;
+}
+
 /* ---------- 空状态 ---------- */
 
 .empty {

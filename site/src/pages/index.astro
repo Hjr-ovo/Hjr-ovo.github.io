@@ -1,10 +1,11 @@
 ---
-// 首页 = 文章列表
+// 首页 = 最近 10 篇文章
 //
-// 做三件事：
+// 做四件事：
 //   1. 取出所有「不是草稿」的文章
 //   2. 按发布日期倒序排列（最新的在最上面）
-//   3. 逐条渲染标题、日期、摘要、分类、标签
+//   3. 只渲染前 10 篇，其余的去 /posts/ 归档页看
+//   4. 逐条渲染标题、日期、摘要、分类、标签
 //
 // 注意：Astro 取出来的集合**顺序是不确定的**，必须自己排。
 // 不排的话每次构建出来的顺序可能都不一样。
@@ -14,9 +15,17 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import { SITE } from '../consts';
 import { formatDate, isoDate } from '../utils/format-date';
 
+// 首页放几篇。想改就改这个数字，下面的按钮和提示文字会自己跟着变
+const RECENT_COUNT = 10;
+
 const posts = (await getCollection('posts', ({ data }) => !data.draft)).sort(
   (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
 );
+
+const recentPosts = posts.slice(0, RECENT_COUNT);
+
+// 多出来的篇数。为 0 时整块「查看更多」不渲染 —— 文章还没攒够，按钮没意义
+const restCount = posts.length - recentPosts.length;
 ---
 
 <BaseLayout>
@@ -31,7 +40,7 @@ const posts = (await getCollection('posts', ({ data }) => !data.draft)).sort(
     </div>
   ) : (
     <ul class="post-list">
-      {posts.map((post) => (
+      {recentPosts.map((post) => (
         <li class="post-item">
           {/* 标题放最前 —— 读者扫列表时先看的就是它，
               日期属于"决定要不要点进去"之后才关心的信息，排标题下面 */}
@@ -68,5 +77,14 @@ const posts = (await getCollection('posts', ({ data }) => !data.draft)).sort(
         </li>
       ))}
     </ul>
+  )}
+
+  {/* 还有更早的文章时，底部给一条去归档页的路。
+      restCount 为 0 就整块不渲染 —— 文章不够 10 篇时不该出现一个点了也没用的按钮 */}
+  {restCount > 0 && (
+    <div class="more-posts">
+      <a class="more-link" href="/posts/">查看更多历史文章</a>
+      <p class="more-hint">还有 {restCount} 篇更早的文章</p>
+    </div>
   )}
 </BaseLayout>

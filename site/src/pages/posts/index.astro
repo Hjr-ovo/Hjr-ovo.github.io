@@ -1,0 +1,70 @@
+---
+// 全部文章（归档页）：/posts/
+//
+// 首页只放最近 10 篇，多出来的都在这儿，按年份分组。
+//
+// 为什么单独做一页、而不是首页「加载更多」：
+//   - 首页 HTML 会一直膨胀，而静态站的首页访问量最大
+//   - 归档页有个固定地址，能收藏、能分享、能从文章页直接跳过来
+//
+// 和首页一样：集合顺序不确定，必须自己按日期倒序排。
+
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { isoDate } from '../../utils/format-date';
+
+const posts = (await getCollection('posts', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+);
+
+// 已经按年份分组了，每行再写完整的「2026 年 9 月 22 日」是废话，只要月-日
+const monthDay = (date: Date) =>
+  `${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+
+// 按年份分组。posts 已经是倒序了，所以年份自然从新到旧
+const years: { year: number; posts: typeof posts }[] = [];
+for (const post of posts) {
+  const year = post.data.pubDate.getFullYear();
+  const last = years[years.length - 1];
+  if (last && last.year === year) {
+    last.posts.push(post);
+  } else {
+    years.push({ year, posts: [post] });
+  }
+}
+---
+
+<BaseLayout title="全部文章" description="所有文章的归档，按年份排列。">
+  <a class="back-link" href="/">← 返回首页</a>
+
+  <h1>全部文章</h1>
+  <p class="page-desc">共 {posts.length} 篇，按年份排列，最新的在最上面。</p>
+
+  {posts.length === 0 ? (
+    <div class="empty">
+      <p>还没有文章。</p>
+    </div>
+  ) : (
+    years.map((group) => (
+      <section class="archive-year">
+        <h2 class="archive-year-title">{group.year}</h2>
+
+        <ul class="archive-list">
+          {group.posts.map((post) => (
+            <li class="archive-item">
+              <time class="archive-date" datetime={isoDate(post.data.pubDate)}>
+                {monthDay(post.data.pubDate)}
+              </time>
+              <a class="archive-link" href={`/posts/${post.id}/`}>
+                {post.data.title}
+              </a>
+              <a class="tag" href={`/categories/${post.data.category}/`}>
+                {post.data.category}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))
+  )}
+</BaseLayout>
