@@ -49,12 +49,14 @@ const moreTitle = related.length > 0 ? '相关文章' : '继续阅读';
 ---
 
 <BaseLayout title={post.data.title} description={post.data.description}>
-  {/* 两栏布局：正文 + 右侧目录。目录栏在窄屏自动折到正文上方，见 global.css */}
-  <div class="post-layout">
-    <article data-pagefind-body>
-      <a class="back-link" data-pagefind-ignore href="/">← 返回文章列表</a>
-
+  <article data-pagefind-body>
+    {/* 两栏布局：正文 + 右侧目录。
+        这里拆成三块（页头 / 正文 / 目录）而不是「article + 目录」两块，
+        是为了让窄屏能把目录塞到页头和正文之间 —— 见 global.css 的 grid-template-areas */}
+    <div class="post-layout">
       <header>
+        <a class="back-link" data-pagefind-ignore href="/">← 返回文章列表</a>
+
         <h1 data-pagefind-meta="title">{post.data.title}</h1>
 
         <p class="post-meta" data-pagefind-ignore>
@@ -83,26 +85,28 @@ const moreTitle = related.length > 0 ? '相关文章' : '继续阅读';
         </div>
       </header>
 
-      <Content />
+      <div class="post-body">
+        <Content />
+      </div>
 
-      {/* 相关文章 / 继续阅读。规则算不出交集时退回最新几篇，标题跟着换 */}
-      {more.length > 0 && (
-        <aside class="related" data-pagefind-ignore>
-          <h2>{moreTitle}</h2>
-          <ul>
-            {more.map((item) => (
-              <li>
-                <a href={`/posts/${item.id}/`}>{item.data.title}</a>
-                <p class="related-meta">
-                  {formatDate(item.data.pubDate)} · {item.data.category}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </aside>
-      )}
-    </article>
+      <TableOfContents headings={headings} />
+    </div>
 
-    <TableOfContents headings={headings} />
-  </div>
+    {/* 相关文章 / 继续阅读。规则算不出交集时退回最新几篇，标题跟着换 */}
+    {more.length > 0 && (
+      <aside class="related" data-pagefind-ignore>
+        <h2>{moreTitle}</h2>
+        <ul>
+          {more.map((item) => (
+            <li>
+              <a href={`/posts/${item.id}/`}>{item.data.title}</a>
+              <p class="related-meta">
+                {formatDate(item.data.pubDate)} · {item.data.category}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </aside>
+    )}
+  </article>
 </BaseLayout>

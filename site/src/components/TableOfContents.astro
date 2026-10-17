@@ -19,9 +19,11 @@ const items = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
 
 {
   items.length >= 2 && (
-    <aside class="toc">
+    <details class="toc" open>
+      {/* 桌面端这是一行静态标题（CSS 里 pointer-events: none，点不折叠）；
+          窄屏它是折叠开关，见下面那段内联脚本和 global.css */}
+      <summary class="toc-title">目录</summary>
       <nav aria-label="文章目录">
-        <p class="toc-title">目录</p>
         <ul class="toc-list">
           {items.map((h) => (
             <li class:list={['toc-item', `toc-d${h.depth}`]}>
@@ -30,9 +32,21 @@ const items = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
           ))}
         </ul>
       </nav>
-    </aside>
+    </details>
   )
 }
+
+<script is:inline>
+  // 窄屏默认收起目录：只留一行「目录」，想看章节点一下再展开。
+  // 桌面端保持展开（右侧常驻侧栏）。
+  //
+  // 为什么是内联脚本而不是普通 <script>：必须在首屏绘制前就把状态定好，
+  // 否则会先看到完整目录列表再被收起，闪一下。Astro 会把普通脚本打包延后执行。
+  // JS 被禁用时退化成「始终展开」，目录照样能看，只是多占几行。
+  if (window.matchMedia('(max-width: 1200px)').matches) {
+    document.currentScript?.previousElementSibling?.removeAttribute('open');
+  }
+</script>
 
 <script>
   // 高亮当前章节：用 IntersectionObserver 盯着正文里的标题元素，

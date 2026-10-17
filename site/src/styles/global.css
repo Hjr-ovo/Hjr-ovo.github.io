@@ -520,28 +520,45 @@ article img {
  * 页面骨架 .wrap 是 46rem 居中单栏，目录栏放在右侧留白里：
  * 把文章容器向右加宽一截（+ 目录栏宽 + 间距），主栏宽度不变，
  * 多出来的部分正好落在 wrap 右侧的空白处。
- * 需要的视口宽度：736px(wrap) + 2×232px(右侧留白) ≈ 1200px，
- * 所以 1200px 以下撤回落单栏、目录折到正文上方。
+ * 需要的视口宽度：736px(wrap) + 2×232px(右侧留白) ≈ 1200px。
+ *
+ * 用 grid-template-areas 而不是「两个子元素各占一列」，是因为窄屏要把目录
+ * 插到页头和正文之间 —— 三块内容得能自由换位置，见下面的媒体查询。
  */
 
 .post-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 13rem;
+  grid-template-areas:
+    'head toc'
+    'body toc';
   column-gap: 1.5rem;
   width: calc(100% + 14.5rem);
 }
 
+.post-layout > header {
+  grid-area: head;
+}
+
+.post-body {
+  grid-area: body;
+}
+
+.toc {
+  grid-area: toc;
+}
+
+/* 窄屏：单栏，顺序变成 页头 → 目录 → 正文。
+   目录不再直接消失（以前是 display: none），而是变成一个可折叠小面板 ——
+   长文章在手机上也要能跳章节，详见 .toc 在移动端的样式。 */
 @media (max-width: 1200px) {
   .post-layout {
     width: 100%;
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  /* 窄屏没有侧边留白，关掉目录栏。
-     不把它摞到正文上方 —— 读者会先看到一屏目录、看不到标题和正文。
-     手机端靠正文自身的小标题导航即可（以后要做可加悬浮「目录」按钮）。 */
-  .toc {
-    display: none;
+    grid-template-areas:
+      'head'
+      'toc'
+      'body';
   }
 }
 
@@ -555,12 +572,89 @@ article img {
   font-size: 0.85rem;
 }
 
+/* 目录标题。桌面端是侧栏顶部一行小字；窄屏它是折叠开关（见下面移动端规则）。
+   注意这条基础规则必须写在两个媒体查询**之前** —— 同等权重下后来者胜，
+   写在后面会把移动端的 margin: 0 覆盖掉。 */
 .toc-title {
   margin: 0 0 0.6rem;
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.05em;
   color: var(--muted);
+}
+
+/* ---------- 窄屏下的目录（折叠面板） ----------
+ *
+ * 桌面上 .toc 是右侧常驻侧栏；窄屏它是页头下方一个带边框的小盒子，
+ * 默认只显示一行「目录 展开」（折叠状态由组件里的内联脚本按视口定）。
+ * 之所以用 <details>：折叠交互浏览器原生支持，不用自己写 JS 开合。
+ */
+@media (max-width: 1200px) {
+  .toc {
+    position: static;
+    max-height: none;
+    margin: 0 0 1.75rem;
+    padding: 0.55rem 0.9rem;
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 0.85rem;
+  }
+
+  .toc-title {
+    margin: 0;
+    /* 自己画「展开 / 收起」，不用浏览器默认三角（各浏览器长得不一样） */
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+
+  /* Safari 要用另一个伪元素才能去掉默认三角 */
+  .toc-title::-webkit-details-marker {
+    display: none;
+  }
+
+  .toc-title::after {
+    content: '展开';
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--muted);
+  }
+
+  .toc[open] .toc-title::after {
+    content: '收起';
+  }
+
+  /* 盒子里已经有边框了，左边那条灰竖线是多余的 */
+  .toc-list {
+    border-left: 0;
+    margin-top: 0.4rem;
+  }
+
+  /* 高亮小竖条贴在边框上不好看，窄屏只靠颜色区分 */
+  .toc-item a.active::before {
+    display: none;
+  }
+}
+
+/* 桌面端：summary 就是一行静态标题，不该被点折叠，也不要折叠三角 */
+@media (min-width: 1201px) {
+  .toc-title {
+    list-style: none;
+    cursor: default;
+    pointer-events: none;
+  }
+
+  .toc-title::-webkit-details-marker {
+    display: none;
+  }
 }
 
 .toc-list {
@@ -1171,4 +1265,82 @@ article img {
   color: inherit;
   padding: 0 0.08em;
   border-radius: 2px;
+}
+
+/* ---------- 多设备适配 ----------
+ *
+ * 用户明确要求「等所有功能做完再统一做适配」，这一节就是那一批补丁。
+ * 断点只分三档，够用就好：
+ *   ≤ 400px  小手机（iPhone SE 一类）
+ *   ≤ 480px  常规手机
+ *   ≤ 640px  大屏手机 / 竖屏平板
+ * 横向溢出靠的是各块自己 overflow-x: auto（代码块、表格、公式），
+ * 实测 360~1440px 全都没有出现页面级横向滚动条。
+ */
+
+/* 小手机：标题降一档，长标题不至于占掉半屏 */
+@media (max-width: 480px) {
+  h1 {
+    font-size: 1.45rem;
+  }
+
+  .post-item h2 {
+    font-size: 1.25em;
+  }
+
+  /* 代码块内边距收一收，窄屏上一行能多显示几个字符 */
+  pre {
+    padding: 0.85rem 0.9rem;
+  }
+
+  .related {
+    margin-top: 2.5rem;
+  }
+}
+
+/* 常规手机：页头与正文之间的大空隙收掉，一屏能多看一行字 */
+@media (max-width: 640px) {
+  .site-header {
+    margin-bottom: 2rem;
+  }
+}
+
+/* 小手机：导航挤一挤；关于页统计卡别换行成 2+1 */
+@media (max-width: 400px) {
+  .site-nav {
+    gap: 0.9rem;
+  }
+
+  .about-head {
+    gap: 1rem;
+  }
+
+  .about-avatar {
+    width: 72px;
+    height: 72px;
+  }
+
+  .about-stats li {
+    min-width: 5rem;
+    padding: 0.75rem 0.6rem;
+  }
+}
+
+/* 归档页：窄屏改成「月日 + 分类」一行、标题单独一行。
+   原来三者挤在一行，长标题会把分类顶到很远的位置，日期也对不齐。 */
+@media (max-width: 520px) {
+  .archive-item {
+    flex-wrap: wrap;
+    gap: 0.1rem 0.6rem;
+  }
+
+  .archive-link {
+    order: 3;
+    flex: 1 1 100%;
+  }
+
+  .archive-item .tag {
+    order: 2;
+    margin-left: auto;
+  }
 }
