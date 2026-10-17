@@ -33,13 +33,13 @@ const { Content, headings } = await render(post);
 <BaseLayout title={post.data.title} description={post.data.description}>
   {/* 两栏布局：正文 + 右侧目录。目录栏在窄屏自动折到正文上方，见 global.css */}
   <div class="post-layout">
-    <article>
-      <a class="back-link" href="/">← 返回文章列表</a>
+    <article data-pagefind-body>
+      <a class="back-link" data-pagefind-ignore href="/">← 返回文章列表</a>
 
       <header>
-        <h1>{post.data.title}</h1>
+        <h1 data-pagefind-meta="title">{post.data.title}</h1>
 
-        <p class="post-meta">
+        <p class="post-meta" data-pagefind-ignore>
           <time datetime={isoDate(post.data.pubDate)}>
             {formatDate(post.data.pubDate)}
           </time>
@@ -53,7 +53,7 @@ const { Content, headings } = await render(post);
           )}
         </p>
 
-        <div class="tag-row">
+        <div class="tag-row" data-pagefind-ignore>
           <a class="tag" href={`/categories/${post.data.category}/`}>
             {post.data.category}
           </a>

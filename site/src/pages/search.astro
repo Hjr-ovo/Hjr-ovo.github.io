@@ -1,0 +1,149 @@
+---
+// 站内搜索：/search/
+//
+// 索引不是 Astro 生成的，而是构建时由 PageFind 扫一遍 dist/ 产出
+// （见 package.json 的 build 脚本：astro build && pagefind --site dist）。
+// 所以这个页面只负责界面，真正干活的是运行时才加载的 /pagefind/pagefind.js。
+//
+// ⚠️ `npm run dev` 下没有 /pagefind/ 目录 —— 索引是构建产物，不是源码。
+// 页面会提示「先构建」，不报错；日常预览搜索请用 npm run build 后的站点。
+//
+// 结果条目复用首页的卡片样式（.post-item），高亮片段用 PageFind 给的
+// excerpt（自带 <mark> 标签）。
+
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="搜索">
+  <h1>搜索</h1>
+  <p class="page-desc">输入关键词，在全部文章里找。支持中英文和代码片段。</p>
+
+  <div class="search-box">
+    <input
+      id="search-input"
+      type="search"
+      placeholder="例如：npm、索引、内存"
+      autocomplete="off"
+      spellcheck="false"
+      autofocus
+    />
+  </div>
+
+  <p id="search-status" class="search-status"></p>
+  <ul id="search-results" class="post-list"></ul>
+</BaseLayout>
+
+<script>
+  const input = document.getElementById('search-input') as HTMLInputElement;
+  const statusEl = document.getElementById('search-status') as HTMLElement;
+  const resultsEl = document.getElementById('search-results') as HTMLElement;
+
+  // PageFind 的运行时对象。第一次搜索时才加载 —— 省得每个访客
+  // 一进页面就拖一份搜索代码下来。
+  let pagefind: any = null;
+  let loadFailed = false;
+
+  async function loadPagefind() {
+    if (pagefind) return pagefind;
+    if (loadFailed) return null;
+    try {
+      // ⚠️ 这里必须绕开打包器，别写成 import('/pagefind/pagefind.js')：
+      //   Vite 会把它改写成 __vitePreload(() => import(...), __VITE_PRELOAD__)，
+      //   而 __VITE_PRELOAD__ 这个占位符在产物里**没有被替换**，
+      //   运行时直接 ReferenceError，搜索永远「索引未生成」（2026-10-17 实测踩到）。
+      //   用 Function 构造器把 import 藏在字符串里，打包器看不见也就不会改写。
+      //   路径是构建产物、不是 npm 包，本来就不该让打包器处理。
+      const runtimeImport = new Function('url', 'return import(url)') as (
+        url: string,
+      ) => Promise<any>;
+      pagefind = await runtimeImport('/pagefind/pagefind.js');
+      // 摘要留长一点，中文一句话信息量比英文小
+      await pagefind.options({ excerptLength: 30 });
+      return pagefind;
+    } catch {
+      loadFailed = true;
+      return null;
+    }
+  }
+
+  function setStatus(text: string) {
+    statusEl.textContent = text;
+  }
+
+  function renderResults(items: any[]) {
+    resultsEl.innerHTML = '';
+    for (const item of items) {
+      const li = document.createElement('li');
+      li.className = 'post-item';
+
+      const h2 = document.createElement('h2');
+      const a = document.createElement('a');
+      a.href = item.url;
+      a.textContent = item.meta?.title ?? item.url;
+      h2.appendChild(a);
+
+      const p = document.createElement('p');
+      p.className = 'search-excerpt';
+      // excerpt 由 PageFind 根据文章原文生成，自带 <mark> 高亮，
+      // 内容全部来自本站自己的 Markdown，可信。
+      p.innerHTML = item.excerpt;
+
+      li.appendChild(h2);
+      li.appendChild(p);
+      resultsEl.appendChild(li);
+    }
+  }
+
+  async function runSearch(query: string) {
+    const q = query.trim();
+
+    // 地址栏同步关键词：刷新/分享都能回到同一个搜索
+    const url = new URL(window.location.href);
+    if (q) url.searchParams.set('q', q);
+    else url.searchParams.delete('q');
+    history.replaceState(null, '', url);
+
+    if (!q) {
+      resultsEl.innerHTML = '';
+      setStatus('');
+      return;
+    }
+
+    const pf = await loadPagefind();
+    if (!pf) {
+      setStatus('搜索索引还没生成：这个功能要在构建后的站点里用（开发模式没有索引）。');
+      return;
+    }
+
+    setStatus('搜索中…');
+    const search = await pf.search(q);
+
+    if (search.results.length === 0) {
+      resultsEl.innerHTML = '';
+      setStatus(`没有找到和「${q}」相关的文章。换个关键词试试？`);
+      return;
+    }
+
+    // 取前 20 条就够，再多读者也不会翻
+    const data = await Promise.all(
+      search.results.slice(0, 20).map((r: any) => r.data()),
+    );
+
+    renderResults(data);
+    setStatus(`找到 ${search.results.length} 篇相关文章`);
+  }
+
+  // 输入防抖：每敲一个字都全量搜一次太浪费，停手 150ms 再搜
+  let timer: number | undefined;
+  input.addEventListener('input', () => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => runSearch(input.value), 150);
+  });
+
+  // 打开页面时如果地址栏带着 ?q=，直接按这个关键词搜
+  const initial = new URLSearchParams(window.location.search).get('q');
+  if (initial) {
+    input.value = initial;
+    runSearch(initial);
+  }
+</script>

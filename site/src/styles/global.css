@@ -617,3 +617,56 @@ article img {
 .empty code {
   font-size: 0.85rem;
 }
+
+/* ---------- 站内搜索 ---------- */
+
+.search-box {
+  margin: 1.5rem 0 0.75rem;
+}
+
+.search-box input {
+  width: 100%;
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.7rem 1rem;
+  color: var(--ink);
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.search-box input::placeholder {
+  color: #a5a39c;
+}
+
+/* 聚焦时用品牌绿描边 + 一圈淡光，比浏览器默认的蓝框贴合站内配色 */
+.search-box input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.search-status {
+  min-height: 1.5em;
+  margin: 0.5rem 0 1rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+/* 搜索结果里的摘要片段：保留 PageFind 的 <mark> 高亮，
+   颜色换成站内的浅绿底，不用浏览器默认的刺眼黄 */
+.search-excerpt {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.search-excerpt mark {
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 0 0.1em;
+  border-radius: 2px;
+}
