@@ -14,6 +14,8 @@ import { getCollection, render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import TableOfContents from '../../components/TableOfContents.astro';
 import { formatDate, isoDate } from '../../utils/format-date';
+import { readingMinutes } from '../../utils/reading-time';
+import { findRelated } from '../../utils/related-posts';
 
 export async function getStaticPaths() {
   const posts = await getCollection('posts', ({ data }) => !data.draft);
@@ -28,6 +30,22 @@ export async function getStaticPaths() {
 const { post } = Astro.props;
 // render() 除了正文组件，还顺手给出 headings（标题树）—— 目录导航的数据源
 const { Content, headings } = await render(post);
+// 阅读时长按 Markdown 原文估算（post.body 是 frontmatter 之后的正文）
+const minutes = readingMinutes(post.body);
+
+// 相关文章：拿全部已发布文章来比，规则见 utils/related-posts.ts
+const allPosts = await getCollection('posts', ({ data }) => !data.draft);
+const related = findRelated(post, allPosts);
+
+// 没有标签/分类交集时（本站现在只有一篇真实文章，就属于这种情况），
+// 退回「继续阅读」列出最新几篇：读到最后总得给人一条路，而不是空着。
+// 标题会跟着换，不冒充「相关」。
+const latest = allPosts
+  .filter((item) => item.id !== post.id)
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
+  .slice(0, 3);
+const more = related.length > 0 ? related : latest;
+const moreTitle = related.length > 0 ? '相关文章' : '继续阅读';
 ---
 
 <BaseLayout title={post.data.title} description={post.data.description}>
@@ -51,6 +69,8 @@ const { Content, headings } = await render(post);
               </time>
             </>
           )}
+          {' · '}
+          <span class="read-time">约 {minutes} 分钟读完</span>
         </p>
 
         <div class="tag-row" data-pagefind-ignore>
@@ -64,6 +84,23 @@ const { Content, headings } = await render(post);
       </header>
 
       <Content />
+
+      {/* 相关文章 / 继续阅读。规则算不出交集时退回最新几篇，标题跟着换 */}
+      {more.length > 0 && (
+        <aside class="related" data-pagefind-ignore>
+          <h2>{moreTitle}</h2>
+          <ul>
+            {more.map((item) => (
+              <li>
+                <a href={`/posts/${item.id}/`}>{item.data.title}</a>
+                <p class="related-meta">
+                  {formatDate(item.data.pubDate)} · {item.data.category}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      )}
     </article>
 
     <TableOfContents headings={headings} />
