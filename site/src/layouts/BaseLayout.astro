@@ -73,7 +73,8 @@ const pageTitle = title ? `${title} - ${SITE.title}` : SITE.title;
           <span class="site-title">{SITE.title}</span>
         </a>
         <nav class="site-nav">
-          <a href="/">文章</a>
+          {/* 全部文章走归档页 /posts/；首页仍在 /，从站名/头像进 */}
+          <a href="/posts/">全部文章</a>
           <a href="/categories/">分类</a>
           <a href="/tags/">标签</a>
           <a href="/search/">搜索</a>
