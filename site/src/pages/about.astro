@@ -72,13 +72,21 @@ const stats = [
       <h2>联系</h2>
       <p>发现问题、想指正某篇写错的地方，都可以来找我。</p>
       <ul class="about-links">
-        {ABOUT.links.map((link) => (
-          <li>
-            <a href={link.href} target="_blank" rel="noopener">
-              {link.label}
-            </a>
-          </li>
-        ))}
+        {ABOUT.links.map((link) => {
+          // 站外链接新开标签页，mailto 保持当前页（新开一个空白页会很怪）
+          const isExternal = link.href.startsWith('http');
+          return (
+            <li>
+              <a
+                href={link.href}
+                target={isExternal ? '_blank' : undefined}
+                rel={isExternal ? 'noopener' : undefined}
+              >
+                {link.label}
+              </a>
+            </li>
+          );
+        })}
       </ul>
     </section>
   </article>

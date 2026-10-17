@@ -9,7 +9,10 @@
 //   2. 一句话写完了，末尾要有逗号；列表里每项之间用逗号隔开
 //   3. 想删掉某一整段，就把那一行连同尾逗号一起删掉
 //
-// 隐私口径（2026-10-17 定）：只写技术身份，不写真实姓名、学校名、邮箱。
+// 隐私口径（2026-10-17 定）：只写技术身份，不写真实姓名、学校名。
+// 邮箱只放不含姓名拼音的地址（在 src/consts.ts 的 SITE.email）。
+
+import { SITE } from '../consts';
 
 export const ABOUT = {
   // 显示名。站点其他地方的作者名在 src/consts.ts，这里保持和它一致
@@ -52,11 +55,13 @@ export const ABOUT = {
     '搜索用的是构建时生成的本地索引（PageFind），查询词不会发到任何服务器。',
   ],
 
-  // 联系方式。只放 GitHub —— 真实邮箱含姓名拼音，不公开
+  // 联系方式。邮箱地址本身当作文字显示，读者不用悬停就能看见、也能直接选中复制
   links: [
     { label: 'GitHub', href: 'https://github.com/Hjr-ovo' },
+    { label: SITE.email, href: `mailto:${SITE.email}` },
   ],
 } as const;
 
-// 想加邮箱或别的链接，就照着上面那一行再加一条：
-//   { label: '邮箱', href: 'mailto:某个地址' },
+// 想再加一个链接，就照着上面几行再写一条：
+//   { label: '显示的文字', href: 'https://...' },
+// 邮箱的地址统一在 src/consts.ts 的 SITE.email 改，这里不用动。

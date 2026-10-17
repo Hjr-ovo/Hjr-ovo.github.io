@@ -7,4 +7,6 @@ export const SITE = {
   author: 'Hjr-ovo',
   lang: 'zh-CN',
   avatar: '/avatar.png',
+  // 公开联系邮箱。刻意选不含姓名拼音的那个地址
+  email: 'hjr.ovo@gmail.com',
 } as const;
