@@ -1016,27 +1016,64 @@ article img {
   color: var(--muted);
 }
 
-/* ---------- 归档页 /posts/ ---------- */
+/* ---------- 归档页 /posts/ ----------
+ * 形态是一根竖线贯穿的时间轴：每个有文章的月份一个节点（圆点 + 月份标签），
+ * 当月文章列在节点下面。线用 ::before 绝对定位画，圆点不透明，
+ * 线在圆点处自然被盖住断开，不用给线算「跳过圆点」的分段。 */
 
-.archive-year {
-  margin-top: 2.25rem;
-}
-
-/* 年份是分隔符不是内容，压低存在感：小字、灰色、只留一条细线 */
-.archive-year-title {
-  margin: 0 0 0.25rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid var(--line);
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.archive-list {
+.timeline {
   list-style: none;
   margin: 0;
   padding: 0;
+  position: relative;
+}
+
+/* 竖线：2px，从第一个节点上方一点贯到最后节点下方一点。
+   左右位置算过的：圆点 left:0 宽 0.5rem，中心在 0.25rem 处；
+   线宽 2px，left = 0.25rem - 1px 才能压在圆心正中。 */
+.timeline::before {
+  content: '';
+  position: absolute;
+  top: 0.3rem;
+  bottom: 0.3rem;
+  left: calc(0.25rem - 1px);
+  width: 2px;
+  background: var(--line);
+}
+
+/* 月份之间的间距。用兄弟选择器而不是给每项加 margin-bottom：
+   最后一个月之后不会多出一截空白。 */
+.timeline-month + .timeline-month {
+  margin-top: 1.75rem;
+}
+
+/* 节点圆点：实心强调色。top 是按月份标签首行文字中心算的 ——
+   标签 0.95rem、行高继承 body 的 1.75，文字中心约在 0.83rem 处，
+   减去圆点半径 0.25rem，所以 top: 0.58rem。 */
+.timeline-dot {
+  position: absolute;
+  left: 0;
+  top: 0.58rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* 月份标签：这一节点的名字。左缩进 1.5rem 让开竖线和圆点 */
+.timeline-label {
+  margin: 0 0 0.3rem;
+  padding-left: 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* 当月文章列表：整组左缩进 1.5rem，和月份标签对齐挂在节点下 */
+.timeline-items {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1.5rem;
 }
 
 /* 一行 = 月日 + 标题 + 分类。日期等宽数字，标题长短不一时右端才对得齐 */
