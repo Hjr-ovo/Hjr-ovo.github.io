@@ -3,7 +3,10 @@
  * 设计原则（第一版刻意保持朴素）：
  *   - 不做视觉炫技，先保证「读得下去」：字距、行高、对比度
  *   - 技术内容的三块硬骨头必须好看：代码块、表格、引用
- *   - 亮色为主，深色模式留给以后（需求里属「想要有」）
+ *   - 亮色为默认，深色见下面的 [data-theme='dark']
+ *
+ * 配色全部走这组 CSS 变量：深色模式**只覆盖变量**，不改任何具体规则。
+ * 所以新增样式时别写死颜色 —— 写死一个 #f1efe8，深色下就会留一块白斑。
  */
 
 :root {
@@ -16,9 +19,53 @@
   --accent-soft: #e1f5ee;
   --code-bg: #f4f3ee;
 
+  /* 派生色：只被少数几处用到，但深色下必须跟着变，所以也提成变量 */
+  --line-strong: #bcd9cd; /* 卡片 / 输入框 hover 时的描边 */
+  --chip-bg: #f1efe8; /* 次要标签（灰色胶囊）的底 */
+  --table-head-bg: #f7f6f1;
+  --placeholder: #a5a39c;
+  --shadow-card:
+    0 1px 2px rgba(44, 44, 42, 0.04),
+    0 4px 12px rgba(44, 44, 42, 0.035);
+  --shadow-card-hover:
+    0 2px 4px rgba(44, 44, 42, 0.05),
+    0 8px 20px rgba(15, 110, 86, 0.08);
+
   --maxw: 46rem;
   --font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+}
+
+/* ---------- 深色主题 ----------
+ * 由 <html data-theme="dark"> 触发（BaseLayout 里的内联脚本在首屏绘制前就设好，
+ * 否则会先闪一下白底）。取的是**暖调深灰**而不是纯黑：纯黑配暖白字对比过硬，
+ * 长时间读反而累；带一点绿调，和品牌的墨绿也能接上。
+ *
+ * 强调色必须提亮 —— 原来的 #0f6e56 放在深底上几乎看不见。
+ */
+[data-theme='dark'] {
+  --ink: #e7e5de;
+  --muted: #9c9a92;
+  --line: #2f322c;
+  --bg: #171917;
+  --bg-card: #1e211e;
+  --accent: #6ed3ad;
+  --accent-soft: #1c3a31;
+  --code-bg: #21241f;
+
+  --line-strong: #3c5a4e;
+  --chip-bg: #262a25;
+  --table-head-bg: #1d201c;
+  --placeholder: #74746c;
+  --shadow-card:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover:
+    0 2px 6px rgba(0, 0, 0, 0.5),
+    0 10px 24px rgba(0, 0, 0, 0.35);
+
+  /* 让浏览器把滚动条、搜索框清除按钮这些原生控件也切成深色 */
+  color-scheme: dark;
 }
 
 * {
@@ -87,6 +134,7 @@ body {
 
 .site-nav {
   display: flex;
+  align-items: center;
   gap: 1.25rem;
   font-size: 0.9rem;
 }
@@ -98,6 +146,52 @@ body {
 
 .site-nav a:hover {
   color: var(--accent);
+}
+
+/* ---------- 深色模式开关 ----------
+ * 两颗图标都留在 DOM 里，靠 data-theme 决定显示哪一颗 ——
+ * 这样切换主题不需要动 JS 的 DOM，也不会出现图标闪一下的情况。
+ */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  color: var(--muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.theme-toggle:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.theme-toggle:focus-visible {
+  outline: none;
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* 浅色下显示月亮（点它进入深色），深色下显示太阳 */
+.theme-toggle .icon-sun {
+  display: none;
+}
+
+[data-theme='dark'] .theme-toggle .icon-sun {
+  display: block;
+}
+
+[data-theme='dark'] .theme-toggle .icon-moon {
+  display: none;
 }
 
 main {
@@ -178,9 +272,7 @@ a {
   border: 1px solid var(--line);
   border-radius: 10px;
   /* 两层的阴影最自然：近处一层细的定轮廓，远处一层散的做厚度 */
-  box-shadow:
-    0 1px 2px rgba(44, 44, 42, 0.04),
-    0 4px 12px rgba(44, 44, 42, 0.035);
+  box-shadow: var(--shadow-card);
   /* 左侧那道绿条平时是透明的（见 ::before），
      这里先声明过渡，悬停时它才会"长"出来而不是突然弹出 */
   transition:
@@ -192,10 +284,8 @@ a {
 /* 悬停：卡片轻微上浮 + 描边转绿 + 左边冒出一道绿条。
    三个变化都很轻，目的是"确认这一整块可点"，而不是吸引注意力。 */
 .post-item:hover {
-  border-color: #bcd9cd;
-  box-shadow:
-    0 2px 4px rgba(44, 44, 42, 0.05),
-    0 8px 20px rgba(15, 110, 86, 0.08);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-card-hover);
   transform: translateY(-2px);
 }
 
@@ -272,7 +362,7 @@ a {
 }
 
 .tag.muted {
-  background: #f1efe8;
+  background: var(--chip-bg);
   color: var(--muted);
 }
 
@@ -367,6 +457,18 @@ pre code {
   border-radius: 8px;
 }
 
+/* Shiki 双主题（见 astro.config.mjs）：一段代码的两套配色都以 CSS 变量
+   写在元素的内联 style 上，这里按当前主题挑一套。
+   ⚠️ 必须 !important —— 默认样式是内联的，普通规则压不住。 */
+[data-theme='dark'] .astro-code,
+[data-theme='dark'] .astro-code span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
+}
+
 /* 表格 —— 技术文档常见 */
 table {
   width: 100%;
@@ -384,7 +486,7 @@ th, td {
 }
 
 th {
-  background: #f7f6f1;
+  background: var(--table-head-bg);
   font-weight: 500;
 }
 
@@ -640,7 +742,7 @@ article img {
 }
 
 .search-box input::placeholder {
-  color: #a5a39c;
+  color: var(--placeholder);
 }
 
 /* 聚焦时用品牌绿描边 + 一圈淡光，比浏览器默认的蓝框贴合站内配色 */
@@ -741,14 +843,14 @@ article img {
 }
 
 .scope:hover span {
-  border-color: #bcd9cd;
+  border-color: var(--line-strong);
   color: var(--ink);
 }
 
 .scope input:checked + span {
   color: var(--accent);
   background: var(--accent-soft);
-  border-color: #bcd9cd;
+  border-color: var(--line-strong);
   font-weight: 500;
 }
 

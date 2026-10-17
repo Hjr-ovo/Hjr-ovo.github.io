@@ -24,13 +24,17 @@ export default defineConfig({
   //   所以只在改名（旧文件已消失）后追加，不要手工往里塞现存的文件名。
   redirects: loadRedirects(),
 
-  // 代码高亮主题。
-  // Astro 内置 Shiki，默认用的是 `github-dark` —— 那是**深色**配色，
-  // 放在我们这个浅色页面上会变成一块突兀的黑块，所以换成浅色主题。
+  // 代码高亮主题：浅色 / 深色各一套。
+  // 写 `theme: 'github-light'` 是不行的 —— 那样深色模式下代码块会是一整块白底。
+  // 用 `themes` 时 Shiki 会把两套配色都写成 CSS 变量（--shiki-light / --shiki-dark）
+  // 挂在元素上，具体用哪套由 CSS 按当前主题决定（见 global.css 的 .astro-code 规则）。
   // 想看别的效果：https://shiki.style/themes
   markdown: {
     shikiConfig: {
-      theme: 'github-light',
+      themes: {
+        light: 'github-light',
+        dark: 'github-dark',
+      },
     },
 
     // 数学公式。两个插件缺一不可：

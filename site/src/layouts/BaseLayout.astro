@@ -39,6 +39,30 @@ const pageTitle = title ? `${title} - ${SITE.title}` : SITE.title;
 
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
+    {/* 告诉浏览器本站两种配色都支持：原生控件（滚动条、日期选择器等）会跟着变 */}
+    <meta name="color-scheme" content="light dark" />
+
+    {/* 主题要在首屏绘制之前定好，否则会先看到白底再闪成深色。
+        所以这段**不能**写成普通 <script>（Astro 会把普通脚本打包成模块并延后执行），
+        必须 is:inline 原样塞进 head。 */}
+    <script is:inline>
+      (() => {
+        try {
+          const saved = localStorage.getItem('theme');
+          const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          // 用户手动选过就听用户的，没选过就跟系统
+          const theme =
+            saved === 'light' || saved === 'dark'
+              ? saved
+              : systemDark
+                ? 'dark'
+                : 'light';
+          document.documentElement.dataset.theme = theme;
+        } catch {
+          // 隐私模式下 localStorage 可能直接抛错，忽略即可：退化成浅色
+        }
+      })();
+    </script>
   </head>
 
   <body>
@@ -53,6 +77,46 @@ const pageTitle = title ? `${title} - ${SITE.title}` : SITE.title;
           <a href="/categories/">分类</a>
           <a href="/tags/">标签</a>
           <a href="/search/">搜索</a>
+          {/* 两个图标都渲染出来，用 CSS 按当前主题显示其中一个（见 global.css） */}
+          <button
+            class="theme-toggle"
+            id="theme-toggle"
+            type="button"
+            aria-label="切换深色模式"
+            title="切换深色模式"
+          >
+            <svg
+              class="icon-moon"
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20.5 14.6A8.6 8.6 0 1 1 9.4 3.5a7 7 0 0 0 11.1 11.1Z" />
+            </svg>
+            <svg
+              class="icon-sun"
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="4.2" />
+              <path
+                d="M12 2.2v2.1M12 19.7v2.1M2.2 12h2.1M19.7 12h2.1M5.1 5.1l1.5 1.5M17.4 17.4l1.5 1.5M5.1 18.9l1.5-1.5M17.4 6.6l1.5-1.5"
+              />
+            </svg>
+          </button>
         </nav>
       </div>
     </header>
@@ -69,5 +133,52 @@ const pageTitle = title ? `${title} - ${SITE.title}` : SITE.title;
         <span>© {new Date().getFullYear()} {SITE.author}</span>
       </div>
     </footer>
+
+    <script>
+      // 主题开关。首屏用哪个主题已经在 head 的内联脚本里定好了，
+      // 这里只管「点击切换」和「没手动选过时跟随系统」。
+      const toggle = document.getElementById('theme-toggle');
+
+      function currentTheme() {
+        return document.documentElement.dataset.theme === 'dark'
+          ? 'dark'
+          : 'light';
+      }
+
+      function applyTheme(theme: string) {
+        document.documentElement.dataset.theme = theme;
+        const nextLabel = theme === 'dark' ? '切换到浅色模式' : '切换深色模式';
+        toggle?.setAttribute('aria-label', nextLabel);
+        toggle?.setAttribute('title', nextLabel);
+      }
+
+      function readSaved() {
+        try {
+          return localStorage.getItem('theme');
+        } catch {
+          return null;
+        }
+      }
+
+      toggle?.addEventListener('click', () => {
+        const next = currentTheme() === 'dark' ? 'light' : 'dark';
+        try {
+          localStorage.setItem('theme', next);
+        } catch {
+          // 存不了就算了，本次会话内仍然生效
+        }
+        applyTheme(next);
+      });
+
+      // 没手动选过主题的人，跟随系统切换（比如到点自动进入夜间模式）
+      window
+        .matchMedia('(prefers-color-scheme: dark)')
+        .addEventListener('change', (event) => {
+          if (!readSaved()) applyTheme(event.matches ? 'dark' : 'light');
+        });
+
+      // 首屏脚本已经设过 data-theme，这里补上按钮的文案
+      applyTheme(currentTheme());
+    </script>
   </body>
 </html>
