@@ -1,0 +1,74 @@
+---
+// 文章目录导航（Table of Contents）
+//
+// 数据来源：render() 返回的 headings —— Astro 解析 Markdown 时会自动
+// 收集标题树，每项含 { depth, text, slug }，不用自己写正则抠标题。
+// slug 同时用于锚点跳转：Astro 渲染出的标题元素自带同款 id。
+//
+// 只收 h2/h3：h1 是文章大标题（页面顶部已经有了），h4 以下太细碎。
+// 标题少于两个就整个不显示 —— 一个章节的目录不如没有。
+
+interface Props {
+  headings: { depth: number; text: string; slug: string }[];
+}
+
+const { headings } = Astro.props;
+
+const items = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
+---
+
+{
+  items.length >= 2 && (
+    <aside class="toc">
+      <nav aria-label="文章目录">
+        <p class="toc-title">目录</p>
+        <ul class="toc-list">
+          {items.map((h) => (
+            <li class:list={['toc-item', `toc-d${h.depth}`]}>
+              <a href={`#${h.slug}`}>{h.text}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </aside>
+  )
+}
+
+<script>
+  // 高亮当前章节：用 IntersectionObserver 盯着正文里的标题元素，
+  // 哪个进入视口上部，就给对应目录链接加 .active。
+  // 用 observer 而不是 scroll 事件 —— 浏览器原生节流，滚动不丢帧。
+  const toc = document.querySelector('.toc');
+  if (toc) {
+    // hash 在地址栏里是 URL 编码的（中文标题尤其），取出来要解码才能对上 id
+    const links = new Map<string, HTMLAnchorElement>();
+    toc.querySelectorAll('a').forEach((a) => {
+      const id = decodeURIComponent(a.hash.slice(1));
+      links.set(id, a as HTMLAnchorElement);
+    });
+
+    const setActive = (id: string | null) => {
+      links.forEach((a, key) => a.classList.toggle('active', key === id));
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // 一个章节跨屏时可能多个标题同时命中，取最靠上的那个
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible.length > 0) {
+          setActive(visible[0].target.id);
+        }
+      },
+      // 顶部留 72px 避开可能出现的固定遮挡；底部收到 70% 处，
+      // 让「当前章节」尽快切换而不是等标题爬到屏幕正中
+      { rootMargin: '-72px 0px -70% 0px' },
+    );
+
+    links.forEach((_, id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+  }
+</script>

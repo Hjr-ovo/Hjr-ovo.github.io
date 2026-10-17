@@ -12,6 +12,7 @@
 
 import { getCollection, render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import TableOfContents from '../../components/TableOfContents.astro';
 import { formatDate, isoDate } from '../../utils/format-date';
 
 export async function getStaticPaths() {
@@ -25,40 +26,46 @@ export async function getStaticPaths() {
 }
 
 const { post } = Astro.props;
-const { Content } = await render(post);
+// render() 除了正文组件，还顺手给出 headings（标题树）—— 目录导航的数据源
+const { Content, headings } = await render(post);
 ---
 
 <BaseLayout title={post.data.title} description={post.data.description}>
-  <article>
-    <a class="back-link" href="/">← 返回文章列表</a>
+  {/* 两栏布局：正文 + 右侧目录。目录栏在窄屏自动折到正文上方，见 global.css */}
+  <div class="post-layout">
+    <article>
+      <a class="back-link" href="/">← 返回文章列表</a>
 
-    <header>
-      <h1>{post.data.title}</h1>
+      <header>
+        <h1>{post.data.title}</h1>
 
-      <p class="post-meta">
-        <time datetime={isoDate(post.data.pubDate)}>
-          {formatDate(post.data.pubDate)}
-        </time>
-        {post.data.updatedDate && (
-          <>
-            {' · 更新于 '}
-            <time datetime={isoDate(post.data.updatedDate)}>
-              {formatDate(post.data.updatedDate)}
-            </time>
-          </>
-        )}
-      </p>
+        <p class="post-meta">
+          <time datetime={isoDate(post.data.pubDate)}>
+            {formatDate(post.data.pubDate)}
+          </time>
+          {post.data.updatedDate && (
+            <>
+              {' · 更新于 '}
+              <time datetime={isoDate(post.data.updatedDate)}>
+                {formatDate(post.data.updatedDate)}
+              </time>
+            </>
+          )}
+        </p>
 
-      <div class="tag-row">
-        <a class="tag" href={`/categories/${post.data.category}/`}>
-          {post.data.category}
-        </a>
-        {post.data.tags.map((tag) => (
-          <a class="tag muted" href={`/tags/${tag}/`}>{tag}</a>
-        ))}
-      </div>
-    </header>
+        <div class="tag-row">
+          <a class="tag" href={`/categories/${post.data.category}/`}>
+            {post.data.category}
+          </a>
+          {post.data.tags.map((tag) => (
+            <a class="tag muted" href={`/tags/${tag}/`}>{tag}</a>
+          ))}
+        </div>
+      </header>
 
-    <Content />
-  </article>
+      <Content />
+    </article>
+
+    <TableOfContents headings={headings} />
+  </div>
 </BaseLayout>

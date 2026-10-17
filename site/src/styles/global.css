@@ -413,6 +413,103 @@ article img {
   border-radius: 8px;
 }
 
+/* ---------- 文章页两栏布局（正文 + 目录） ----------
+ *
+ * 页面骨架 .wrap 是 46rem 居中单栏，目录栏放在右侧留白里：
+ * 把文章容器向右加宽一截（+ 目录栏宽 + 间距），主栏宽度不变，
+ * 多出来的部分正好落在 wrap 右侧的空白处。
+ * 需要的视口宽度：736px(wrap) + 2×232px(右侧留白) ≈ 1200px，
+ * 所以 1200px 以下撤回落单栏、目录折到正文上方。
+ */
+
+.post-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 13rem;
+  column-gap: 1.5rem;
+  width: calc(100% + 14.5rem);
+}
+
+@media (max-width: 1200px) {
+  .post-layout {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 窄屏没有侧边留白，关掉目录栏。
+     不把它摞到正文上方 —— 读者会先看到一屏目录、看不到标题和正文。
+     手机端靠正文自身的小标题导航即可（以后要做可加悬浮「目录」按钮）。 */
+  .toc {
+    display: none;
+  }
+}
+
+/* 目录侧栏：宽屏时钉在视口上方，长文滚到底也还在 */
+.toc {
+  position: sticky;
+  top: 2rem;
+  align-self: start;
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
+  font-size: 0.85rem;
+}
+
+.toc-title {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--line);
+}
+
+.toc-item a {
+  display: block;
+  padding: 0.28rem 0.75rem;
+  color: var(--muted);
+  text-decoration: none;
+  line-height: 1.5;
+  /* 标题长的截断，不换行撑高侧栏 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toc-item a:hover {
+  color: var(--accent);
+}
+
+/* h3 缩进一档，体现层级 */
+.toc-d3 a {
+  padding-left: 1.5rem;
+}
+
+/* 当前章节：绿色 + 左侧竖条亮起。
+   竖条用 ::before 画在链接左边，盖住 .toc-list 的灰边 */
+.toc-item a.active {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.toc-item a.active::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 0.15rem;
+  bottom: 0.15rem;
+  width: 2px;
+  background: var(--accent);
+}
+
+.toc-item {
+  position: relative;
+}
+
 /* ---------- 分类页 ---------- */
 
 .page-desc {
