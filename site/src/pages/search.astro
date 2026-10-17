@@ -63,6 +63,7 @@ const postIndex = posts.map((post) => ({
       <input type="checkbox" name="scope" value="body" checked />
       <span>正文</span>
     </label>
+    <button type="button" class="scope-clear" id="scope-clear">清除选择</button>
   </div>
 
   <p id="search-status" class="search-status"></p>
@@ -108,6 +109,17 @@ const postIndex = posts.map((post) => ({
   const scopeInputs = Array.from(
     document.querySelectorAll<HTMLInputElement>('input[name="scope"]'),
   );
+  const clearBtn = document.getElementById('scope-clear') as HTMLButtonElement;
+
+  // 一个按钮管两件事：有勾选时是「清除选择」，全清空后变成「全选」。
+  // 只做单向清空的话，用户想反悔就只能一格一格点回来。
+  function syncClearButton() {
+    const anyChecked = scopeInputs.some((el) => el.checked);
+    clearBtn.textContent = anyChecked ? '清除选择' : '全选';
+    clearBtn.title = anyChecked
+      ? '取消所有搜索范围'
+      : '重新选中全部搜索范围';
+  }
 
   const postIndex: PostMeta[] = JSON.parse(
     document.getElementById('post-index')?.textContent || '[]',
@@ -399,8 +411,18 @@ const postIndex = posts.map((post) => ({
 
   // 勾选/取消范围立刻重搜，不用等输入
   for (const el of scopeInputs) {
-    el.addEventListener('change', () => runSearch(input.value));
+    el.addEventListener('change', () => {
+      syncClearButton();
+      runSearch(input.value);
+    });
   }
+
+  clearBtn.addEventListener('click', () => {
+    const anyChecked = scopeInputs.some((el) => el.checked);
+    for (const el of scopeInputs) el.checked = !anyChecked;
+    syncClearButton();
+    runSearch(input.value);
+  });
 
   // 打开页面时如果地址栏带着 ?q=（可能还带 ?in=），按它恢复现场
   const params = new URLSearchParams(window.location.search);
@@ -414,4 +436,7 @@ const postIndex = posts.map((post) => ({
     input.value = initialQuery;
     runSearch(initialQuery);
   }
+
+  // 地址栏可能只带了部分范围（?in=title），按钮文案要跟着变
+  syncClearButton();
 </script>

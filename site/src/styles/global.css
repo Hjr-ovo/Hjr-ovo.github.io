@@ -668,6 +668,49 @@ article img {
   color: var(--muted);
 }
 
+/* 「清除选择 / 全选」文字按钮。刻意不做成胶囊 —— 它是个工具，
+   不该和三个搜索范围选项长得一样、抢读者的注意力。 */
+.scope-clear {
+  padding: 0.2rem 0.4rem;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.scope-clear:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.scope-clear:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  color: var(--accent);
+}
+
+/* 手机上「搜索范围」这四个字太占地，去掉之后三个胶囊 + 清除按钮
+   才能排在一行（否则按钮会被挤到第二行，看着像段孤立文字） */
+@media (max-width: 520px) {
+  .search-scopes-label {
+    display: none;
+  }
+
+  .search-scopes {
+    gap: 0.35rem;
+  }
+}
+
 .scope {
   position: relative;
   display: inline-flex;
