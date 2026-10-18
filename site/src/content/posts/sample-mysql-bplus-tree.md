@@ -2,7 +2,7 @@
 title: 【示例】为什么 MySQL 索引要用 B+ 树而不是平衡二叉树
 description: 这是用于验证站点排版的示例文章。从磁盘 IO 次数的角度推演为什么数据库索引偏好矮胖的多路查找树，而不是又高又瘦的二叉树。
 pubDate: 2026-09-22
-category: 数据库
+categories: [数据库]
 tags: [MySQL, 索引, 数据结构, 示例]
 draft: false
 ---

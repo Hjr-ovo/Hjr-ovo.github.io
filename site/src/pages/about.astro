@@ -14,7 +14,7 @@ const posts = await getCollection('posts', ({ data }) => !data.draft);
 
 const stats = [
   { num: posts.length, label: '篇文章' },
-  { num: new Set(posts.map((post) => post.data.category)).size, label: '个分类' },
+  { num: new Set(posts.flatMap((post) => post.data.categories)).size, label: '个分类' },
   { num: new Set(posts.flatMap((post) => post.data.tags)).size, label: '个标签' },
 ];
 ---

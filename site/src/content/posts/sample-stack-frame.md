@@ -2,7 +2,7 @@
 title: 【示例】函数调用时栈帧里到底存了什么
 description: 这是用于验证站点排版的示例文章。用一次普通函数调用推演栈帧的构成，以及为什么递归太深会栈溢出。
 pubDate: 2026-09-22
-category: 编程语言
+categories: [编程语言]
 tags: [栈, 函数调用, C语言, 示例]
 draft: false
 ---

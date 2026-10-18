@@ -2,7 +2,7 @@
 title: Astro 7 填 remarkPlugins 构建报错：默认 Markdown 处理器已换成 Sätteri
 description: astro.config.mjs 里一写 remarkPlugins 或 rehypePlugins，构建直接失败，报错让你补装 @astrojs/markdown-remark。记录 Astro 7 把默认处理器从 unified 换成 Sätteri 这个 breaking change，以及同场踩到的 npm 挂死、KaTeX 样式表漏引两个坑。
 pubDate: 2026-10-17
-category: 开发工具
+categories: [开发工具]
 tags: [Astro, Markdown, 踩坑]
 ---
 

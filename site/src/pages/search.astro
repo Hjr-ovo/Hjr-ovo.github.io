@@ -27,7 +27,7 @@ const postIndex = posts.map((post) => ({
   title: post.data.title,
   description: post.data.description ?? '',
   tags: post.data.tags ?? [],
-  category: post.data.category,
+  categories: post.data.categories ?? [],
   date: formatDate(post.data.pubDate),
 }));
 ---
@@ -93,7 +93,7 @@ const postIndex = posts.map((post) => ({
     title: string;
     description: string;
     tags: string[];
-    category: string;
+    categories: string[];
     date: string;
   };
 
@@ -246,13 +246,15 @@ const postIndex = posts.map((post) => ({
       li.appendChild(h2);
       li.appendChild(p);
 
-      if (hit.tags.length) {
+      if (hit.categories.length || hit.tags.length) {
         const tagRow = document.createElement('div');
         tagRow.className = 'tag-row';
-        const category = document.createElement('span');
-        category.className = 'tag';
-        category.textContent = hit.category;
-        tagRow.appendChild(category);
+        for (const category of hit.categories) {
+          const categoryEl = document.createElement('span');
+          categoryEl.className = 'tag';
+          categoryEl.textContent = category;
+          tagRow.appendChild(categoryEl);
+        }
         for (const tag of hit.tags) {
           const chip = document.createElement('span');
           // 标签命中的那个标签用主色，一眼能看出是哪命中
@@ -359,7 +361,7 @@ const postIndex = posts.map((post) => ({
               title: item.meta?.title ?? meta?.title ?? item.url,
               description: meta?.description ?? '',
               tags: meta?.tags ?? [],
-              category: meta?.category ?? '',
+              categories: meta?.categories ?? [],
               date: meta?.date ?? '',
               excerpt: item.excerpt,
             },

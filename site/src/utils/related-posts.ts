@@ -2,7 +2,8 @@
 //
 // 规则刻意做得简单、可预测：只看「标签重合」和「同分类」两件事。
 //   - 每重合一个标签 +3 分
-//   - 同一个分类 +2 分（分类比标签粗，所以权重低一点）
+//   - 每共有一个分类 +2 分（分类比标签粗，所以权重低一点；
+//     2026-10-18 文章支持多分类后，从「是否同分类」改成「共同分类数」）
 // 分数相同时，发布时间更新的排前面。
 //
 // 为什么不引入「正文相似度」之类的高级算法：
@@ -26,11 +27,15 @@ export function findRelated(current: Post, all: Post[], limit = 3): Post[] {
       const sharedTags = post.data.tags.filter((tag) =>
         current.data.tags.includes(tag),
       ).length;
-      const sameCategory = post.data.category === current.data.category ? 1 : 0;
+      const sharedCategories = post.data.categories.filter((c) =>
+        current.data.categories.includes(c),
+      ).length;
 
       return {
         post,
-        score: sharedTags * WEIGHT_SHARED_TAG + sameCategory * WEIGHT_SAME_CATEGORY,
+        score:
+          sharedTags * WEIGHT_SHARED_TAG +
+          sharedCategories * WEIGHT_SAME_CATEGORY,
       };
     })
     .filter((item) => item.score > 0)

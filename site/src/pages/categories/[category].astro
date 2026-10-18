@@ -15,12 +15,14 @@ import { formatDate, isoDate } from '../../utils/format-date';
 export async function getStaticPaths() {
   const posts = await getCollection('posts', ({ data }) => !data.draft);
 
-  // 按分类分组
+  // 按分类分组。一篇文章可以有多个分类（2026-10-18 起），
+  // 在每个分类的文章列表里各出现一次。
   const groups = new Map<string, typeof posts>();
   for (const post of posts) {
-    const c = post.data.category;
-    if (!groups.has(c)) groups.set(c, []);
-    groups.get(c)!.push(post);
+    for (const c of post.data.categories) {
+      if (!groups.has(c)) groups.set(c, []);
+      groups.get(c)!.push(post);
+    }
   }
 
   return [...groups.entries()].map(([category, list]) => ({

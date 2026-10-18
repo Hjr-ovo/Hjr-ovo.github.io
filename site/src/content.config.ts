@@ -21,7 +21,11 @@ const posts = defineCollection({
     title: z.string(),
     description: z.string(),
     pubDate: z.coerce.date(),
-    category: z.string(),
+    // 分类：一篇文章可以属于多个分类（2026-10-18 从单值 category 改来）。
+    // 至少留一个 —— 没有分类的文章在分类页里会成孤儿。
+    // min(1) 而不是 default([])：空数组等于没分类，必须是作者有意为之，
+    // 而"无意漏写"和"有意不放"要能区分开，所以不给默认值。
+    categories: z.array(z.string()).min(1),
 
     // ---- 选填 ----
     // updatedDate 不写就不显示（不是每篇文章都会更新）

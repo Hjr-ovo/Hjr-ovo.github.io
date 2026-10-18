@@ -3,7 +3,7 @@ title: 【示例】静态站点生成器到底在构建时做了什么
 description: 这是用于验证站点排版的示例文章。用本站自己的构建流程当例子，说明 SSG 把一个 Markdown 文件变成网页中间经历了哪些步骤。
 pubDate: 2026-09-22
 updatedDate: 2026-09-22
-category: 项目实践
+categories: [项目实践]
 tags: [Astro, 静态站点, 示例]
 draft: false
 ---

@@ -2,7 +2,7 @@
 title: 【示例】HTTP 缓存到底怎么判断过期：Cache-Control 与 ETag 的分工
 description: 这是用于验证站点排版的示例文章，不是真实踩坑记录。内容给出 HTTP 缓存判断流程的骨架，用于测试长文、代码块、表格在页面上的显示效果。
 pubDate: 2026-09-22
-category: 计算机网络
+categories: [计算机网络]
 tags: [HTTP, 缓存, 示例]
 draft: false
 ---

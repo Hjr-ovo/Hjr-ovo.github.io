@@ -3,7 +3,7 @@ title: npm install 卡死 23 分钟：一次 esbuild 安装脚本导致的假死
 description: Windows 上 npm install 没有任何输出也不报错，进程就这么挂着。记录怎么判断它是真在干活还是已经死了，以及为什么加 --ignore-scripts 就好了。
 pubDate: 2026-09-19
 updatedDate: 2026-09-20
-category: 开发工具
+categories: [开发工具]
 tags: [npm, Windows, 踩坑]
 draft: false
 ---

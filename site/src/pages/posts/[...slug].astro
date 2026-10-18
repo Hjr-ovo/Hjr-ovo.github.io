@@ -76,9 +76,11 @@ const moreTitle = related.length > 0 ? '相关文章' : '继续阅读';
         </p>
 
         <div class="tag-row" data-pagefind-ignore>
-          <a class="tag" href={`/categories/${post.data.category}/`}>
-            {post.data.category}
-          </a>
+          {post.data.categories.map((category) => (
+            <a class="tag" href={`/categories/${category}/`}>
+              {category}
+            </a>
+          ))}
           {post.data.tags.map((tag) => (
             <a class="tag muted" href={`/tags/${tag}/`}>{tag}</a>
           ))}
@@ -101,7 +103,7 @@ const moreTitle = related.length > 0 ? '相关文章' : '继续阅读';
             <li>
               <a href={`/posts/${item.id}/`}>{item.data.title}</a>
               <p class="related-meta">
-                {formatDate(item.data.pubDate)} · {item.data.category}
+                {formatDate(item.data.pubDate)} · {item.data.categories.join(' · ')}
               </p>
             </li>
           ))}
