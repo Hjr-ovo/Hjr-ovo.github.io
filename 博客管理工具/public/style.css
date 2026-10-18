@@ -1,4 +1,4 @@
-/* 博客管理工具的样式
+/* 博客后台工具的样式
  *
  * 全部手写，没有用任何 CSS 框架（见 技术架构.md 第四节）。
  * 配色跟博客站点保持一致：浅色底、深灰字、蓝色强调。
@@ -395,6 +395,14 @@ body {
   margin-left: 6px;
 }
 
+/* 字段标签后的补充说明（如「可以选多个」），和 legend-note 同款小字 */
+.field-hint {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-faint);
+  margin-left: 7px;
+}
+
 .field {
   display: block;
   margin-bottom: 14px;
@@ -715,22 +723,87 @@ body {
   color: var(--warn-text);
 }
 
-/* 编辑页的标签快捷按钮 */
-.tag-suggest {
+/* ============ 分类 / 标签多选选择器（2026-10-18） ============
+   分三行：已选（带 × 移除）/ 候选胶囊（点一下切换选中）/ 手动添加。
+   分类和标签共用这一套，区别只在 JS 里传的数据源。 */
+
+.picker-selected {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin: 0 0 14px;
+  min-height: 30px;
+  margin-bottom: 8px;
 }
 
-.tag-suggest-label {
+/* 一个都没选时的一句提示 */
+.picker-empty {
   font-size: 12px;
   color: var(--text-faint);
 }
 
-.tag-suggest-chip {
-  padding: 2px 9px;
+/* 已选项：实心一点的胶囊，右侧 × 移除 */
+.pick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 11px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-size: 12px;
+  color: var(--accent);
+  line-height: 1.4;
+}
+
+.pick-chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pick-chip-x:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* 「清除全部」按钮：跟在已选项后面，只有多项时才显眼 */
+.pick-clear {
+  padding: 3px 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.pick-clear:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* 候选胶囊：点一下选中/取消 */
+.picker-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pick-option {
+  padding: 3px 11px;
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: #fff;
@@ -741,10 +814,34 @@ body {
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
-.tag-suggest-chip:hover {
+.pick-option:hover {
   border-color: var(--accent);
   color: var(--accent);
-  background: var(--accent-soft);
+}
+
+/* 已选中的候选：和已选区视觉统一 */
+.pick-option.is-selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.pick-option .pick-n {
+  margin-left: 5px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+/* 手动添加一行 */
+.picker-add {
+  display: flex;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.picker-add input {
+  flex: 1;
+  max-width: 320px;
 }
 
 /* ============ 提示条 ============ */

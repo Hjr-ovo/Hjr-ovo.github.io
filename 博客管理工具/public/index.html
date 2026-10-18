@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>博客管理工具</title>
+    <title>博客后台工具</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="stylesheet" href="/style.css" />
@@ -13,7 +13,7 @@
     <!-- ============ 顶栏 ============ -->
     <header class="topbar">
       <div class="topbar-inner">
-        <h1 class="brand">博客管理工具</h1>
+        <h1 class="brand">博客后台工具</h1>
 
         <div class="topbar-actions">
           <span id="blog-status" class="status status-off">博客未启动</span>
@@ -100,22 +100,40 @@
               <span class="field-label">更新日期 <em class="optional">选填</em></span>
               <input id="f-updateddate" type="date" />
             </label>
-
-            <label class="field">
-              <span class="field-label">分类 <em>必填</em></span>
-              <input id="f-category" type="text" list="category-list" placeholder="选一个或自己填" />
-              <datalist id="category-list"></datalist>
-            </label>
           </div>
 
-          <label class="field">
-            <span class="field-label">标签 <em class="optional">选填</em></span>
-            <input id="f-tags" type="text" placeholder="用逗号分隔，例：npm, Windows, 踩坑" />
-          </label>
+          <!-- 分类：多选（2026-10-18 从单选输入框改来）。
+               一篇文章可以有多个分类，站点上会同时出现在每个分类页里。
+               点候选胶囊切换选中；已选区域点 × 移除；也可以直接输新名字添加。 -->
+          <div class="field">
+            <span class="field-label">
+              分类 <em>必填</em>
+              <span class="field-hint">可以选多个，文章会同时出现在每个分类页里</span>
+            </span>
+            <div id="cat-picker" class="picker">
+              <div id="cat-selected" class="picker-selected"></div>
+              <div id="cat-options" class="picker-options"></div>
+              <div class="picker-add">
+                <input id="cat-new" type="text" placeholder="没找到？输入新分类名" />
+                <button id="cat-add" class="btn btn-tiny" type="button">添加</button>
+              </div>
+            </div>
+          </div>
 
-          <!-- 已用过的标签，点一下直接加进输入框（2026-10-14 新增）：
-               手打容易出「npm」和「NPM」这种碎片，站点上就会多出只有一篇的标签页 -->
-          <div id="tag-suggest" class="tag-suggest" hidden></div>
+          <!-- 标签：多选（2026-10-18 升级）。
+               原来是「逗号分隔文本 + 单点追加」，现在改成和分类一样的胶囊多选：
+               点一下选中、再点取消，已选区域一键清除。手打新标签照样支持。 -->
+          <div class="field">
+            <span class="field-label">标签 <em class="optional">选填</em></span>
+            <div id="tag-picker" class="picker">
+              <div id="tag-selected" class="picker-selected"></div>
+              <div id="tag-options" class="picker-options"></div>
+              <div class="picker-add">
+                <input id="tag-new" type="text" placeholder="没找到？输入新标签名" />
+                <button id="tag-add" class="btn btn-tiny" type="button">添加</button>
+              </div>
+            </div>
+          </div>
 
           <label class="field field-check">
             <input id="f-draft" type="checkbox" />

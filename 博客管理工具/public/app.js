@@ -1,4 +1,4 @@
-// 博客管理工具 —— 界面逻辑
+// 博客后台工具 —— 界面逻辑
 //
 // 原生 JavaScript，没有任何框架（见 技术架构.md 第四节）。
 // 结构很简单：三个"页"（列表、编辑）、两个弹窗、一组接口调用。
@@ -29,6 +29,12 @@ const state = {
   originalSlug: '',
   // 正文是否有未保存改动
   dirty: false,
+
+  // 编辑表单里选中的分类 / 标签（2026-10-18 起都是多选）。
+  // 不再从输入框的文本反解析 —— 选中态由胶囊点击维护，
+  // 输入框只负责「添加一个还没人选过的新值」。
+  formCategories: [],
+  formTags: [],
 };
 
 // 博客站点的地址 —— 「去博客看」的分类页/标签页链接要用它
@@ -105,8 +111,8 @@ async function loadMeta() {
 
   state.meta = res;
 
-  // 分类候选要等 taxonomy 拿到之后才能填完整（见 fillCategoryOptions）
-  fillCategoryOptions();
+  // 分类候选要等 taxonomy 拿到之后才能填完整（见 renderCategoryPicker）
+  renderCategoryPicker();
 
   // 提示文章目录（让你知道工具在操作哪儿）
   $('posts-dir-hint').textContent = '文章目录：' + res.postsDir;
@@ -121,10 +127,10 @@ async function loadTaxonomy() {
 
     renderTaxonomy();
     renderFilterBar();
-    renderTagSuggest();
+    renderTagPicker();
 
     // 分类候选要更新 —— 文章里实际用过的分类才最可能是你想选的
-    fillCategoryOptions();
+    renderCategoryPicker();
 
     // 格式有问题的文章单独提醒一下（它们没被统计进去）
     if (res.unparsed && res.unparsed.length > 0) {
@@ -318,11 +324,12 @@ function renderList() {
       meta.appendChild(d);
     }
 
-    if (post.category) {
-      const c = document.createElement('span');
-      c.className = 'badge';
-      c.textContent = post.category;
-      meta.appendChild(c);
+    // 分类徽章：一篇可以有多个（2026-10-18 起），挨个显示
+    for (const c of post.categories || []) {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = c;
+      meta.appendChild(badge);
     }
 
     if (post.draft) {
@@ -387,7 +394,10 @@ function filteredPosts() {
   const { kind, name } = state.filter;
 
   if (kind === 'category') {
-    return posts.filter((p) => String(p.category || '').trim() === name);
+    // 多分类：文章的 categories 里含这个名字就留下
+    return posts.filter((p) =>
+      (p.categories || []).some((c) => String(c).trim() === name),
+    );
   }
 
   return posts.filter((p) => (p.tags || []).some((t) => String(t).trim() === name));
@@ -516,73 +526,175 @@ function taxonomyUrl(kind, name) {
   return `${BLOG_BASE}${prefix}${encodeURIComponent(name)}/`;
 }
 
-// ---- 填写表单时复用已有的分类 / 标签 ----
+// ---- 填写表单时复用已有的分类 / 标签（2026-10-18 升级为多选） ----
 
-// 分类候选：把「文章里实际用过的」排在前面，预设清单里还没用过的接在后面。
-// 最常用的一定能直接选到；预设清单也不至于被埋掉，新分类仍可手填。
-function fillCategoryOptions() {
-  const dl = $('category-list');
-  if (!dl) return;
+// 候选清单 = 「文章里实际用过的」+「meta 里的预设」，
+// 用过的排前面（最常用的一定能直接选到），预设里没用过的接在后面。
+function pickerCandidates(kind) {
+  const used =
+    kind === 'category' ? state.taxonomy.categories || [] : state.taxonomy.tags || [];
+  const presets = kind === 'category' ? state.meta.categories || [] : [];
+  const counts = new Map(used.map((x) => [x.name, x.count]));
+  const names = used.map((x) => x.name);
+  for (const p of presets) {
+    if (!names.includes(p)) names.push(p);
+  }
+  return names.map((name) => ({ name, count: counts.get(name) || 0 }));
+}
 
-  const used = (state.taxonomy.categories || []).map((c) => c.name);
-  const presets = state.meta.categories || [];
-  const ordered = [...used, ...presets.filter((c) => !used.includes(c))];
+function renderCategoryPicker() {
+  renderPicker('category');
+}
 
-  dl.innerHTML = '';
-  for (const name of ordered) {
-    const opt = document.createElement('option');
-    opt.value = name;
-    dl.appendChild(opt);
+function renderTagPicker() {
+  renderPicker('tag');
+}
+
+// 渲染一个多选选择器：已选行（× 移除 + 清除全部）+ 候选行（点一下切换选中）
+function renderPicker(kind) {
+  const isCat = kind === 'category';
+  const selectedBox = $(isCat ? 'cat-selected' : 'tag-selected');
+  const optionsBox = $(isCat ? 'cat-options' : 'tag-options');
+  if (!selectedBox || !optionsBox) return;
+
+  const selected = isCat ? state.formCategories : state.formTags;
+  const candidates = pickerCandidates(kind);
+
+  // 已选但不在候选里的（刚手打添加的），也补一个候选位 ——
+  // 不然点了添加之后候选区看不到它，想反悔取消都找不到
+  for (const name of selected) {
+    if (!candidates.some((c) => c.name === name)) {
+      candidates.push({ name, count: 0 });
+    }
+  }
+
+  // ---- 已选行 ----
+  selectedBox.innerHTML = '';
+  if (selected.length === 0) {
+    const empty = document.createElement('span');
+    empty.className = 'picker-empty';
+    empty.textContent = isCat ? '还没选分类（至少选一个）' : '还没选标签';
+    selectedBox.appendChild(empty);
+  } else {
+    for (const name of selected) {
+      selectedBox.appendChild(makePickedChip(kind, name));
+    }
+    // 一键清除。分类至少要留一个，所以只剩一个时分类不显示清除按钮
+    //（标签随便清，选多少是自由）
+    if (!isCat || selected.length > 1) {
+      const clear = document.createElement('button');
+      clear.type = 'button';
+      clear.className = 'pick-clear';
+      clear.textContent = '清除全部';
+      clear.title = isCat
+        ? '清空所有分类（保存时会提醒至少留一个）'
+        : '清空所有标签';
+      clear.onclick = () => clearPicks(kind);
+      selectedBox.appendChild(clear);
+    }
+  }
+
+  // ---- 候选行 ----
+  optionsBox.innerHTML = '';
+  if (candidates.length === 0) {
+    const empty = document.createElement('span');
+    empty.className = 'picker-empty';
+    empty.textContent =
+      '还没有可选的' + (isCat ? '分类' : '标签') + '，用下面的输入框添加第一个';
+    optionsBox.appendChild(empty);
+    return;
+  }
+  for (const cand of candidates) {
+    optionsBox.appendChild(makeOptionChip(kind, cand));
   }
 }
 
-// 标签快捷按钮：点一下就加进输入框。
-// 手打容易出现「npm」和「NPM」这种碎片，站点上就会多出一个只有一篇的标签页。
-function renderTagSuggest() {
-  const box = $('tag-suggest');
-  if (!box) return;
-
-  const tags = state.taxonomy.tags || [];
-  if (tags.length === 0) {
-    box.hidden = true;
-    return;
-  }
-
-  box.innerHTML = '';
+// 已选胶囊：名字 + 右侧 ×
+function makePickedChip(kind, name) {
+  const chip = document.createElement('span');
+  chip.className = 'pick-chip';
 
   const label = document.createElement('span');
-  label.className = 'tag-suggest-label';
-  label.textContent = '点一下加进去：';
-  box.appendChild(label);
+  label.textContent = name;
+  chip.appendChild(label);
 
-  for (const t of tags) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'tag-suggest-chip';
-    btn.textContent = t.name;
-    btn.title = `已有 ${t.count} 篇用过这个标签`;
-    btn.onclick = () => addTagToInput(t.name);
-    box.appendChild(btn);
-  }
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'pick-chip-x';
+  x.textContent = '×';
+  x.title = `去掉「${name}」`;
+  x.onclick = () => togglePick(kind, name);
+  chip.appendChild(x);
 
-  box.hidden = false;
+  return chip;
 }
 
-function addTagToInput(name) {
-  const el = $('f-tags');
-  const current = el.value
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s) => s !== '');
+// 候选胶囊：选中态实心高亮；角标是「已有几篇用过」
+function makeOptionChip(kind, cand) {
+  const selected = kind === 'category' ? state.formCategories : state.formTags;
+  const isOn = selected.includes(cand.name);
 
-  if (current.includes(name)) {
-    toast('已经有「' + name + '」了');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'pick-option' + (isOn ? ' is-selected' : '');
+  btn.title = isOn ? '再点一下取消' : '点一下选中';
+
+  const name = document.createElement('span');
+  name.textContent = cand.name;
+  btn.appendChild(name);
+
+  if (cand.count > 0) {
+    const n = document.createElement('span');
+    n.className = 'pick-n';
+    n.textContent = String(cand.count);
+    n.title = `已有 ${cand.count} 篇用过`;
+    btn.appendChild(n);
+  }
+
+  btn.onclick = () => togglePick(kind, cand.name);
+  return btn;
+}
+
+// 点一下选中、再点一下取消
+function togglePick(kind, name) {
+  const key = kind === 'category' ? 'formCategories' : 'formTags';
+  const list = state[key];
+  const at = list.indexOf(name);
+  if (at === -1) list.push(name);
+  else list.splice(at, 1);
+  state.dirty = true;
+  renderPicker(kind);
+}
+
+// 一键清除
+function clearPicks(kind) {
+  if (kind === 'category') state.formCategories = [];
+  else state.formTags = [];
+  state.dirty = true;
+  renderPicker(kind);
+}
+
+// 输入框添加：给「候选里还没有的新名字」用。回车或点「添加」都行
+function addPickFromInput(kind) {
+  const input = $(kind === 'category' ? 'cat-new' : 'tag-new');
+  const name = input.value.trim();
+  if (!name) {
+    toast('先输入名字');
     return;
   }
 
-  current.push(name);
-  el.value = current.join(', ');
+  const key = kind === 'category' ? 'formCategories' : 'formTags';
+  if (state[key].includes(name)) {
+    toast(`「${name}」已经选了`);
+    input.value = '';
+    return;
+  }
+
+  state[key].push(name);
+  input.value = '';
   state.dirty = true;
+  renderPicker(kind);
+  toast(`已添加「${name}」`);
 }
 
 // ---- 改名 / 合并 ----
@@ -828,11 +940,19 @@ async function openEditor(slug) {
   $('f-description').value = String(data.description || '');
   $('f-pubdate').value = String(data.pubDate || '');
   $('f-updateddate').value = data.updatedDate ? String(data.updatedDate) : '';
-  $('f-category').value = String(data.category || '');
-  $('f-tags').value = Array.isArray(data.tags) ? data.tags.join(', ') : '';
   $('f-draft').checked = data.draft === true;
   $('f-slug').value = slug;
   $('f-body').value = body;
+
+  // 分类 / 标签：回填多选选中态（2026-10-18 起都是数组）
+  state.formCategories = Array.isArray(data.categories)
+    ? data.categories.map((c) => String(c).trim()).filter((c) => c !== '')
+    : [];
+  state.formTags = Array.isArray(data.tags)
+    ? data.tags.map((t) => String(t).trim()).filter((t) => t !== '')
+    : [];
+  renderCategoryPicker();
+  renderTagPicker();
 
   $('edit-title').textContent = '编辑文章';
   $('btn-delete').hidden = false;
@@ -849,8 +969,8 @@ function clearForm() {
     'f-description',
     'f-pubdate',
     'f-updateddate',
-    'f-category',
-    'f-tags',
+    'cat-new',
+    'tag-new',
     'f-slug',
     'f-body',
   ]) {
@@ -858,6 +978,13 @@ function clearForm() {
   }
   $('f-draft').checked = false;
   $('slug-warning').hidden = true;
+
+  // 多选选中态一起清掉，并重绘（否则上一篇的已选胶囊还挂在编辑区）
+  state.formCategories = [];
+  state.formTags = [];
+  renderCategoryPicker();
+  renderTagPicker();
+
   updateBodyStats();
 }
 
@@ -917,16 +1044,25 @@ async function suggestSlug() {
 // ============ 保存 ============
 
 async function save() {
+  // 输入框里可能还有没点「添加」的内容 —— 自动并入，别让用户白打一顿
+  for (const [kind, key, inputId] of [
+    ['category', 'formCategories', 'cat-new'],
+    ['tag', 'formTags', 'tag-new'],
+  ]) {
+    const pending = $(inputId).value.trim();
+    if (pending && !state[key].includes(pending)) {
+      state[key].push(pending);
+    }
+    $(inputId).value = '';
+  }
+
   const data = {
     title: $('f-title').value.trim(),
     description: $('f-description').value.trim(),
     pubDate: $('f-pubdate').value,
     updatedDate: $('f-updateddate').value,
-    category: $('f-category').value.trim(),
-    tags: $('f-tags')
-      .value.split(',')
-      .map((s) => s.trim())
-      .filter((s) => s !== ''),
+    categories: state.formCategories,
+    tags: state.formTags,
     draft: $('f-draft').checked,
   };
 
@@ -938,7 +1074,7 @@ async function save() {
   if (!data.title) problems.push('· 标题没填');
   if (!data.description) problems.push('· 摘要没填');
   if (!data.pubDate) problems.push('· 发布日期没填');
-  if (!data.category) problems.push('· 分类没填');
+  if (data.categories.length === 0) problems.push('· 分类至少选一个');
   if (!slug) problems.push('· 文件名没填');
   else {
     const c = checkSlugLocally(slug);
@@ -1215,7 +1351,7 @@ function askModal(title, text, opts = {}) {
 // 注意：只关管理工具，博客运行在另一个进程里，不受影响。
 async function quitTool() {
   const yes = await askModal(
-    '关闭博客管理工具？',
+    '关闭博客后台工具？',
     '关掉后这个管理界面就打不开了（浏览器标签页可以一起关掉）。\n\n' +
       '注意：博客本身不受影响 —— 它跑在另一个进程里。\n' +
       '想再打开管理工具时，双击一次「启动.bat」就行。',
@@ -1288,13 +1424,30 @@ function bindEvents() {
   });
 
   // 其他字段改动也标脏
-  for (const id of ['f-title', 'f-description', 'f-pubdate', 'f-updateddate', 'f-category', 'f-tags']) {
+  // （分类/标签不走这里 —— 它们由胶囊点击维护，togglePick 里自己标脏）
+  for (const id of ['f-title', 'f-description', 'f-pubdate', 'f-updateddate']) {
     $(id).addEventListener('input', () => {
       state.dirty = true;
     });
   }
   $('f-draft').addEventListener('change', () => {
     state.dirty = true;
+  });
+
+  // ---- 分类 / 标签多选 ----
+  $('cat-add').onclick = () => addPickFromInput('category');
+  $('tag-add').onclick = () => addPickFromInput('tag');
+  $('cat-new').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addPickFromInput('category');
+    }
+  });
+  $('tag-new').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addPickFromInput('tag');
+    }
   });
 
   // ---- 从文件导入正文 ----
