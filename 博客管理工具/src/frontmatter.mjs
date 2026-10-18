@@ -14,7 +14,9 @@
 // ---------- 字段定义 ----------
 
 // 必填字段（缺了 Astro 会报错）
-export const REQUIRED_FIELDS = ['title', 'description', 'pubDate', 'category'];
+// categories 是 2026-10-18 从单值 category 改来的：一篇文章可以属于多个分类。
+// 存量文章已用 .workbuddy/tmp/migrate-categories.mjs 批量迁移。
+export const REQUIRED_FIELDS = ['title', 'description', 'pubDate', 'categories'];
 
 // 选填字段
 export const OPTIONAL_FIELDS = ['updatedDate', 'tags', 'draft'];
@@ -166,11 +168,14 @@ export function buildFile(data, body) {
   if (data.updatedDate) {
     fmLines.push(`updatedDate: ${data.updatedDate}`);
   }
-  fmLines.push(`category: ${yamlString(data.category)}`);
+  // 分类：数组，至少一个（validate 保证）。元素逐个过 yamlString，
+  // 带冒号/逗号/井号的分类名才不会被 YAML 吃掉
+  const categories = Array.isArray(data.categories) ? data.categories : [];
+  fmLines.push(`categories: ${yamlArrayString(categories)}`);
 
   // tags 永远写出来（空数组也写，便于人工查看）
   const tags = Array.isArray(data.tags) ? data.tags.filter((t) => t !== '') : [];
-  fmLines.push(`tags: [${tags.join(', ')}]`);
+  fmLines.push(`tags: ${yamlArrayString(tags)}`);
 
   fmLines.push(`draft: ${data.draft === true ? 'true' : 'false'}`);
 
@@ -213,6 +218,20 @@ export function validate(data) {
     problems.push('· 「标签」必须是一组标签，不是一个字符串');
   }
 
+  // ---- categories 类型与内容 ----
+  if (!Array.isArray(data.categories)) {
+    problems.push('· 「分类」必须是一组分类，不是一个字符串');
+  } else {
+    const cleaned = data.categories.map((c) => String(c).trim()).filter((c) => c !== '');
+    if (cleaned.length === 0) {
+      problems.push('· 「分类」至少要有一个');
+    } else if (cleaned.length !== data.categories.length) {
+      problems.push('· 「分类」里有空白项，保存前会清掉');
+    } else if (new Set(cleaned).size !== cleaned.length) {
+      problems.push('· 「分类」有重复项，保存前会去掉');
+    }
+  }
+
   return problems;
 }
 
@@ -220,11 +239,22 @@ const FIELD_LABELS = {
   title: '标题',
   description: '摘要',
   pubDate: '发布日期',
-  category: '分类',
+  categories: '分类',
   updatedDate: '更新日期',
   tags: '标签',
   draft: '是否草稿',
 };
+
+/**
+ * 把字符串数组处理成 YAML 里安全的一行数组
+ *
+ * 每个元素单独过 yamlString（带冒号、井号、逗号的分类名/标签名
+ * 必须加引号，否则会被 YAML 语法吃掉）。空数组写成 `[]`。
+ */
+export function yamlArrayString(items) {
+  const cleaned = items.map((s) => String(s).trim()).filter((s) => s !== '');
+  return `[${cleaned.map((s) => yamlString(s)).join(', ')}]`;
+}
 
 /**
  * 判断是不是合法的 YYYY-MM-DD

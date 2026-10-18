@@ -107,9 +107,17 @@ export async function listTaxonomy() {
     const isDraft = post.data.draft === true;
     if (isDraft) draftCount++;
 
-    // 分类：一篇文章有且只有一个
-    const category = String(post.data.category || '').trim();
-    if (category) bump(categoryMap, category, post.slug, isDraft);
+    // 分类：一篇文章可以有多个（2026-10-18 起），在每个分类下各计一次。
+    // 同一篇里重复的分类只算一次（写坏了也不该让计数虚高）。
+    const categories = Array.isArray(post.data.categories)
+      ? post.data.categories
+      : [];
+    const uniqueCategories = new Set(
+      categories.map((c) => String(c).trim()).filter((c) => c !== ''),
+    );
+    for (const category of uniqueCategories) {
+      bump(categoryMap, category, post.slug, isDraft);
+    }
 
     // 标签：可以没有，可以多个。同一个标签在一篇里重复只算一次。
     const tags = Array.isArray(post.data.tags) ? post.data.tags : [];
@@ -190,7 +198,9 @@ export async function renameTaxonomy({ kind, from, to, dryRun = false }) {
     if (!post.parseOk) continue;
 
     if (isCategory) {
-      if (String(post.data.category || '').trim() === fromName) affected.push(post);
+      // 多分类：只要文章的 categories 里有旧名字就受影响
+      const cats = Array.isArray(post.data.categories) ? post.data.categories : [];
+      if (cats.map((c) => String(c).trim()).includes(fromName)) affected.push(post);
     } else {
       const tags = (Array.isArray(post.data.tags) ? post.data.tags : []).map((t) =>
         String(t).trim(),
@@ -208,8 +218,10 @@ export async function renameTaxonomy({ kind, from, to, dryRun = false }) {
   for (const post of posts) {
     if (!post.parseOk) continue;
     if (isCategory) {
-      const c = String(post.data.category || '').trim();
-      if (c) allNames.add(c);
+      for (const c of Array.isArray(post.data.categories) ? post.data.categories : []) {
+        const s = String(c).trim();
+        if (s) allNames.add(s);
+      }
     } else {
       for (const t of post.data.tags || []) {
         const s = String(t).trim();
@@ -263,7 +275,17 @@ export async function renameTaxonomy({ kind, from, to, dryRun = false }) {
       // 算新 frontmatter
       const newData = { ...post.data };
       if (isCategory) {
-        newData.category = toName;
+        // 多分类：只把匹配旧名字的那一项换成新名字，其他分类原样保留；
+        // 合并场景（文章本来就带新名字）下去重，否则同一篇里会出现两个相同分类
+        const cats = Array.isArray(post.data.categories) ? post.data.categories : [];
+        newData.categories = [
+          ...new Set(
+            cats
+              .map((c) => String(c).trim())
+              .map((c) => (c === fromName ? toName : c))
+              .filter((c) => c !== ''),
+          ),
+        ];
       } else {
         const replaced = (post.data.tags || []).map((t) =>
           String(t).trim() === fromName ? toName : String(t).trim(),

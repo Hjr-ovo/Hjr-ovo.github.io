@@ -49,7 +49,8 @@ export async function listPosts() {
         description: String(data.description || ''),
         pubDate: String(data.pubDate || ''),
         updatedDate: data.updatedDate ? String(data.updatedDate) : '',
-        category: String(data.category || ''),
+        // 2026-10-18 起支持多分类
+        categories: Array.isArray(data.categories) ? data.categories.map((c) => String(c)) : [],
         tags: Array.isArray(data.tags) ? data.tags : [],
         draft: data.draft === true,
         // 正文字数，给界面显示用
@@ -66,7 +67,7 @@ export async function listPosts() {
         description: String(err.message || err),
         pubDate: '',
         updatedDate: '',
-        category: '',
+        categories: [],
         tags: [],
         draft: false,
         charCount: 0,
