@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title Blog Tool
+title 博客后台工具
 
 REM ============================================================
 REM  Double-click this file to start the blog tool.

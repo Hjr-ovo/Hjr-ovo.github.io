@@ -281,7 +281,7 @@ async function main() {
   if (await isPortInUse(TOOL_PORT)) {
     // 占了端口的是不是「我们自己」？是的话就当重复启动处理，别吓着用户
     if (await isOurToolRunning()) {
-      console.log('博客管理工具已经开着了，正在打开界面……');
+      console.log('博客后台工具已经开着了，正在打开界面……');
       console.log(TOOL_BASE_URL);
       openBrowser(TOOL_BASE_URL);
       process.exit(0);
@@ -297,12 +297,12 @@ async function main() {
 
   server.listen(TOOL_PORT, TOOL_HOST, () => {
     if (QUIET) {
-      console.log(`博客管理工具已启动： ${TOOL_BASE_URL}`);
+      console.log(`博客后台工具已启动： ${TOOL_BASE_URL}`);
       console.log(`文章目录： ${POSTS_DIR}`);
       console.log(`删除备份： ${BACKUP_DIR}`);
     } else {
       console.log('');
-      console.log('  博客管理工具已启动');
+      console.log('  博客后台工具已启动');
       console.log('  ────────────────────────────────────────');
       console.log(`  管理界面：  ${TOOL_BASE_URL}`);
       console.log(`  文章目录：  ${POSTS_DIR}`);
@@ -316,7 +316,7 @@ async function main() {
   });
 }
 
-// 问一下端口上的服务："你是博客管理工具吗？"
+// 问一下端口上的服务："你是博客后台工具吗？"
 async function isOurToolRunning() {
   try {
     const res = await fetch(`http://${TOOL_HOST}:${TOOL_PORT}/api/hello`, {
