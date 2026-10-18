@@ -21,10 +21,10 @@
 | `site/public/favicon.png` | 现代浏览器 PNG favicon（512） |
 | `site/public/apple-touch-icon.png` | iOS「添加到主屏」（180） |
 | `site/public/icon-192.png` / `icon-512.png` | Android Chrome / PWA（192/512） |
-| `博客管理工具/public/favicon.ico` | 后台网页标签页图标（同四档） |
-| `博客管理工具/public/favicon.png` | 后台 PNG favicon（64） |
-| `博客管理工具/app.ico` | Windows 快捷方式大图标（16/32/48/64/128/256） |
-| `桌面\博客管理工具.lnk` | 后台启动快捷方式（指向 `启动.bat`，等价双击） |
+| `博客后台工具/public/favicon.ico` | 后台网页标签页图标（同四档） |
+| `博客后台工具/public/favicon.png` | 后台 PNG favicon（64） |
+| `博客后台工具/app.ico` | Windows 快捷方式大图标（16/32/48/64/128/256） |
+| `桌面\博客后台工具.lnk` | 后台启动快捷方式（指向 `启动.bat`，等价双击） |
 
 旧文件 `site/public/favicon.svg`（早期自绘矢量图形）**已删除**，
 `BaseLayout.astro` 里的 svg 引用同步移除——不删的话支持 svg favicon 的

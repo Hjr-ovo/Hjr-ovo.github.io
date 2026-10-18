@@ -7,10 +7,10 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// 本文件所在目录：博客管理工具/src/
+// 本文件所在目录：博客后台工具/src/
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// 工具根目录：博客管理工具/
+// 工具根目录：博客后台工具/
 export const TOOL_ROOT = path.resolve(__dirname, '..');
 
 // 仓库根目录：D:\file\myblogweb

@@ -7,10 +7,10 @@
   纯标准库拼字节是唯一可靠的代码路径。
 
 生成的快捷方式：
-  目标      D:\\file\\myblogweb\\博客管理工具\\启动.bat
-  工作目录  D:\\file\\myblogweb\\博客管理工具
-  图标      D:\\file\\myblogweb\\博客管理工具\\app.ico
-  位置      C:\\Users\\20138\\Desktop\\博客管理工具.lnk
+  目标      D:\\file\\myblogweb\\博客后台工具\\启动.bat
+  工作目录  D:\\file\\myblogweb\\博客后台工具
+  图标      D:\\file\\myblogweb\\博客后台工具\\app.ico
+  位置      C:\\Users\\20138\\Desktop\\博客后台工具.lnk
 
 只用了三个字段：RelativePath + WorkingDir + IconLocation（绝对路径）。
 字符串块默认按系统 ANSI 代码页解释，中文路径用 GBK 编码。
@@ -20,10 +20,10 @@ import os
 import struct
 import sys
 
-TARGET = r"D:\file\myblogweb\博客管理工具\启动.bat"
-WORKDIR = r"D:\file\myblogweb\博客管理工具"
-ICON = r"D:\file\myblogweb\博客管理工具\app.ico"
-LNK = r"C:\Users\20138\Desktop\博客管理工具.lnk"
+TARGET = r"D:\file\myblogweb\博客后台工具\启动.bat"
+WORKDIR = r"D:\file\myblogweb\博客后台工具"
+ICON = r"D:\file\myblogweb\博客后台工具\app.ico"
+LNK = r"C:\Users\20138\Desktop\博客后台工具.lnk"
 
 LINK_CLSID = bytes.fromhex("0114020000000000C000000000000046")
 FLAGS = 0x00000008 | 0x00000010 | 0x00000040  # RelativePath|WorkingDir|IconLocation

@@ -11,7 +11,7 @@ import rehypeKatex from 'rehype-katex';
 // 文章改名后的「旧地址 → 新地址」对照表（见 技术架构.md 5.5.2）。
 // 静态站没有服务端，改名会让旧链接直接 404；
 // 这个表让 Astro 在构建时给每个旧地址生成一个跳转页，顶替那个位置。
-// 表本身由博客管理工具在改名时自动维护，这里只负责读出来喂给 Astro。
+// 表本身由博客后台工具在改名时自动维护，这里只负责读出来喂给 Astro。
 import { loadRedirects } from './src/utils/redirects.mjs';
 
 // https://astro.build/config

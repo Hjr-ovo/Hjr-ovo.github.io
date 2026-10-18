@@ -10,9 +10,9 @@
   site/public/apple-touch-icon.png   180（iOS 添加到主屏）
   site/public/icon-192.png           192（Android Chrome / PWA）
   site/public/icon-512.png           512（Android Chrome / PWA）
-  博客管理工具/public/favicon.ico     16/32/48/64 四档（工具网页标签页）
-  博客管理工具/public/favicon.png     64
-  博客管理工具/app.ico               16/32/48/64/128/256（Windows 快捷方式大图标）
+  博客后台工具/public/favicon.ico     16/32/48/64 四档（工具网页标签页）
+  博客后台工具/public/favicon.png     64
+  博客后台工具/app.ico               16/32/48/64/128/256（Windows 快捷方式大图标）
 
 两条硬规矩（来自踩坑）：
   1. ICO 必须自拼容器 —— Pillow 的 ICO 保存只认一张母图再统一 resize，
@@ -34,8 +34,8 @@ SRC = os.path.join(HERE, "logo.png")
 ROOT = os.path.dirname(HERE)  # D:\file\myblogweb
 
 SITE_PUBLIC = os.path.join(ROOT, "site", "public")
-TOOL_PUBLIC = os.path.join(ROOT, "博客管理工具", "public")
-TOOL_DIR = os.path.join(ROOT, "博客管理工具")
+TOOL_PUBLIC = os.path.join(ROOT, "博客后台工具", "public")
+TOOL_DIR = os.path.join(ROOT, "博客后台工具")
 
 
 # ---------------------------------------------------------------
