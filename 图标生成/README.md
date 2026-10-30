@@ -21,10 +21,12 @@
 | `site/public/favicon.png` | 现代浏览器 PNG favicon（512） |
 | `site/public/apple-touch-icon.png` | iOS「添加到主屏」（180） |
 | `site/public/icon-192.png` / `icon-512.png` | Android Chrome / PWA（192/512） |
-| `博客后台工具/public/favicon.ico` | 后台网页标签页图标（同四档） |
-| `博客后台工具/public/favicon.png` | 后台 PNG favicon（64） |
-| `博客后台工具/app.ico` | Windows 快捷方式大图标（16/32/48/64/128/256） |
-| `桌面\博客后台工具.lnk` | 后台启动快捷方式（指向 `启动.bat`，等价双击） |
+| `图标生成/app.ico` | Windows 快捷方式大图标（16/32/48/64/128/256） |
+| `桌面\博客.lnk` | 一键启动本地博客（指向根目录 `预览.bat`） |
+
+> 2026-10-30：博客后台工具已删除，原先它那套 favicon（`博客后台工具/public/`）
+> 和 `app.ico` 一起消失。现在 `app.ico` 就地产在 `图标生成/` 下，只给
+> 桌面«博客»快捷方式用；快捷方式目标改为根目录的 `预览.bat`。
 
 旧文件 `site/public/favicon.svg`（早期自绘矢量图形）**已删除**，
 `BaseLayout.astro` 里的 svg 引用同步移除——不删的话支持 svg favicon 的

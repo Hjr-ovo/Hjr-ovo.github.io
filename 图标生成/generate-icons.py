@@ -10,9 +10,8 @@
   site/public/apple-touch-icon.png   180（iOS 添加到主屏）
   site/public/icon-192.png           192（Android Chrome / PWA）
   site/public/icon-512.png           512（Android Chrome / PWA）
-  博客后台工具/public/favicon.ico     16/32/48/64 四档（工具网页标签页）
-  博客后台工具/public/favicon.png     64
-  博客后台工具/app.ico               16/32/48/64/128/256（Windows 快捷方式大图标）
+  图标生成/app.ico                   16/32/48/64/128/256（Windows 快捷方式大图标，
+                                     桌面「博客」快捷方式用，见 make-shortcut.py）
 
 两条硬规矩（来自踩坑）：
   1. ICO 必须自拼容器 —— Pillow 的 ICO 保存只认一张母图再统一 resize，
@@ -34,8 +33,11 @@ SRC = os.path.join(HERE, "logo.png")
 ROOT = os.path.dirname(HERE)  # D:\file\myblogweb
 
 SITE_PUBLIC = os.path.join(ROOT, "site", "public")
-TOOL_PUBLIC = os.path.join(ROOT, "博客后台工具", "public")
-TOOL_DIR = os.path.join(ROOT, "博客后台工具")
+
+# Windows 快捷方式大图标：产物跟脚本放一起，不散落到别处。
+# （2026-10-30 博客后台工具已删除，原先放在「博客后台工具/app.ico」，
+#   现在快捷方式指向根目录的 预览.bat，图标就近放本目录。）
+SHORTCUT_ICON = os.path.join(HERE, "app.ico")
 
 
 # ---------------------------------------------------------------
@@ -203,16 +205,10 @@ def main() -> None:
     check_ico_structure(os.path.join(SITE_PUBLIC, "favicon.ico"), (16, 32, 48, 64))
     verify_ico(os.path.join(SITE_PUBLIC, "favicon.ico"), (16, 32, 48, 64))
 
-    # ---- 管理工具（后台）----
-    write_ico(os.path.join(TOOL_PUBLIC, "favicon.ico"), (16, 32, 48, 64))
-    save_png(build_icon(64), os.path.join(TOOL_PUBLIC, "favicon.png"))
-    check_ico_structure(os.path.join(TOOL_PUBLIC, "favicon.ico"), (16, 32, 48, 64))
-    verify_ico(os.path.join(TOOL_PUBLIC, "favicon.ico"), (16, 32, 48, 64))
-
     # ---- Windows 快捷方式大图标 ----
-    write_ico(os.path.join(TOOL_DIR, "app.ico"), (16, 32, 48, 64, 128, 256))
-    check_ico_structure(os.path.join(TOOL_DIR, "app.ico"), (16, 32, 48, 64, 128, 256))
-    verify_ico(os.path.join(TOOL_DIR, "app.ico"), (16, 32, 48, 64, 128, 256))
+    write_ico(SHORTCUT_ICON, (16, 32, 48, 64, 128, 256))
+    check_ico_structure(SHORTCUT_ICON, (16, 32, 48, 64, 128, 256))
+    verify_ico(SHORTCUT_ICON, (16, 32, 48, 64, 128, 256))
 
     print("全部图标生成完毕。")
 
