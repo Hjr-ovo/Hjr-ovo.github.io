@@ -111,4 +111,125 @@ const moreTitle = related.length > 0 ? '相关文章' : '继续阅读';
       </aside>
     )}
   </article>
+
+  {/* 代码块增强：多语言切换 + 一键复制。
+      静态 HTML 里代码块本身已经完整可读，这段脚本只是「加功能」，
+      跑不起来也不影响阅读（只是看不到标签栏和复制按钮）。 */}
+  <script>
+    // ── 多语言切换 ──
+    // 容器结构由 src/utils/remark-code-tabs.mjs 在构建时生成，
+    // 这里只把三个并排的面板变成可点的标签页。
+    document.querySelectorAll('.code-tabs[data-tabs]').forEach((box) => {
+      const panels = Array.from(box.children).filter((el) =>
+        el.classList.contains('code-tab-panel')
+      );
+
+      // 只有一种语言就没必要做标签，直接收尾
+      if (panels.length < 2) {
+        box.setAttribute('data-ready', '');
+        return;
+      }
+
+      const bar = document.createElement('div');
+      bar.className = 'code-tabs-bar';
+      bar.setAttribute('role', 'tablist');
+
+      const select = (index) => {
+        panels.forEach((panel, i) => {
+          if (i === index) panel.removeAttribute('hidden');
+          else panel.setAttribute('hidden', '');
+          const tab = bar.children[i];
+          if (tab) {
+            tab.setAttribute('aria-selected', i === index ? 'true' : 'false');
+          }
+        });
+      };
+
+      panels.forEach((panel, i) => {
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.className = 'code-tabs-tab';
+        // data-label 是构建时按语言名生成的显示名（C++ / Java / Python…），
+        // 语言没在对照表里就退回原始语言代码，所以加新语言不用改代码
+        tab.textContent =
+          panel.dataset.label || panel.dataset.lang || `语言 ${i + 1}`;
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
+        tab.addEventListener('click', () => select(i));
+        bar.appendChild(tab);
+      });
+
+      box.insertBefore(bar, box.firstChild);
+      select(0);
+      box.setAttribute('data-ready', '');
+    });
+
+    // ── 一键复制 ──
+    const copyText = async (text) => {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch (_) {
+        /* 走下面的兜底 */
+      }
+      // http 环境或权限被拒时，用老办法
+      try {
+        const temp = document.createElement('textarea');
+        temp.value = text;
+        temp.setAttribute('readonly', '');
+        temp.style.position = 'fixed';
+        temp.style.opacity = '0';
+        document.body.appendChild(temp);
+        temp.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(temp);
+        return ok;
+      } catch (_) {
+        return false;
+      }
+    };
+
+    const makeCopyButton = (getText) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'code-copy';
+      btn.textContent = '复制';
+      btn.setAttribute('aria-label', '复制这段代码');
+
+      btn.addEventListener('click', async () => {
+        const ok = await copyText(getText());
+        btn.textContent = ok ? '已复制' : '复制失败';
+        btn.setAttribute('data-copied', ok ? 'true' : 'false');
+        window.setTimeout(() => {
+          btn.textContent = '复制';
+          btn.removeAttribute('data-copied');
+        }, 1500);
+      });
+
+      return btn;
+    };
+
+    // 标签页里的代码：按钮直接挂在面板上（面板已是 position: relative）
+    document.querySelectorAll('.code-tab-panel').forEach((panel) => {
+      const pre = panel.querySelector('pre');
+      if (pre) panel.appendChild(makeCopyButton(() => pre.innerText));
+    });
+
+    // 普通代码块：外面包一层 .code-wrap 用来给按钮定位
+    document.querySelectorAll('.post-body pre').forEach((pre) => {
+      if (
+        pre.closest('.code-tab-panel') ||
+        pre.parentElement?.classList.contains('code-wrap')
+      ) {
+        return;
+      }
+      const wrap = document.createElement('div');
+      wrap.className = 'code-wrap';
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(pre);
+      wrap.appendChild(makeCopyButton(() => pre.innerText));
+    });
+  </script>
 </BaseLayout>

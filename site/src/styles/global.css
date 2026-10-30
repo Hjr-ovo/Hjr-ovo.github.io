@@ -457,6 +457,114 @@ pre code {
   border-radius: 8px;
 }
 
+/* ---------- 多语言代码切换（```cpp+tab / ```java+tab …） ---------- */
+
+/* 整个切换器：外框 + 圆角，内部标签栏与代码块不再各自画边框 */
+.code-tabs {
+  margin: 1.2em 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--code-bg);
+}
+
+/* 标签栏由页面脚本注入；脚本没跑时这一条不存在，页面也不会空一块 */
+.code-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.35rem 0.45rem;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+.code-tabs-tab {
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1;
+  padding: 0.34rem 0.72rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.code-tabs-tab:hover {
+  color: var(--ink);
+}
+
+.code-tabs-tab[aria-selected='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 500;
+}
+
+/* 脚本接管之前只露出第一块。
+   否则三块会先全部渲染、再被脚本收起，页面高度会跳一下。 */
+.code-tabs:not([data-ready]) .code-tab-panel ~ .code-tab-panel {
+  display: none;
+}
+
+.code-tab-panel {
+  position: relative;
+}
+
+.code-tab-panel > pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+}
+
+/* ---------- 代码块一键复制 ---------- */
+
+/* 非标签页的普通代码块，由脚本在 pre 外面包一层，好给按钮定位 */
+.code-wrap {
+  position: relative;
+  margin: 1.2em 0;
+}
+
+.code-wrap > pre {
+  margin: 0;
+}
+
+.code-copy {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0.32rem 0.55rem;
+  color: var(--muted);
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0.72;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.code-copy:hover,
+.code-copy:focus-visible {
+  opacity: 1;
+  color: var(--ink);
+}
+
+.code-copy[data-copied='true'] {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* 触屏设备没有 hover，按钮直接常显，别让人找不到 */
+@media (hover: none) {
+  .code-copy {
+    opacity: 1;
+  }
+}
+
 /* Shiki 双主题（见 astro.config.mjs）：一段代码的两套配色都以 CSS 变量
    写在元素的内联 style 上，这里按当前主题挑一套。
    ⚠️ 必须 !important —— 默认样式是内联的，普通规则压不住。 */

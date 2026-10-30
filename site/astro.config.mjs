@@ -8,6 +8,11 @@ import { defineConfig } from 'astro/config';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 
+// 多语言代码切换：把连续的 `xxx+tab` 代码块合并成可切换的语言标签页。
+// 必须在 remark 阶段做 —— Shiki 高亮跑在自定义 rehype 插件之前，
+// 到 rehype 时原始代码块已经被替换掉了（详见该文件顶部注释）。
+import remarkCodeTabs from './src/utils/remark-code-tabs.mjs';
+
 // 文章改名后的「旧地址 → 新地址」对照表（见 技术架构.md 5.5.2）。
 // 静态站没有服务端，改名会让旧链接直接 404；
 // 这个表让 Astro 在构建时给每个旧地址生成一个跳转页，顶替那个位置。
@@ -41,7 +46,7 @@ export default defineConfig({
     //   remark 阶段：认出「这是数学」→ 交给后面
     //   rehype 阶段：变成真正的 HTML 结构
     // 顺序也不能反 —— remark 处理 Markdown，rehype 处理 HTML，是流水线的两段。
-    remarkPlugins: [remarkMath],
+    remarkPlugins: [remarkMath, remarkCodeTabs],
     rehypePlugins: [rehypeKatex],
   },
 });
