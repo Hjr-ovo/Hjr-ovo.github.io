@@ -18,6 +18,7 @@
   --accent: #0f6e56;
   --accent-soft: #e1f5ee;
   --code-bg: #f4f3ee;
+  --mark-bg: #f9edbf; /* 正文 <mark> 高亮底色（从 Obsidian 的 ==高亮== 转来） */
 
   /* 派生色：只被少数几处用到，但深色下必须跟着变，所以也提成变量 */
   --line-strong: #bcd9cd; /* 卡片 / 输入框 hover 时的描边 */
@@ -52,6 +53,7 @@
   --accent: #6ed3ad;
   --accent-soft: #1c3a31;
   --code-bg: #21241f;
+  --mark-bg: #4a3f18;
 
   --line-strong: #3c5a4e;
   --chip-bg: #262a25;
@@ -455,6 +457,16 @@ pre code {
    这里不用 !important 强行覆盖，只是确保圆角与内边距不被它顶掉 */
 .astro-code {
   border-radius: 8px;
+}
+
+/* 正文内联高亮
+   Obsidian 的 ==高亮== 在站点上不成立，写作时改写成 <mark>…</mark>。
+   浏览器默认的 <mark> 是刺眼的纯黄，深色下更是一块白斑，所以统一走变量。 */
+.post-body mark {
+  background: var(--mark-bg);
+  color: inherit;
+  padding: 0.1em 0.25em;
+  border-radius: 3px;
 }
 
 /* ---------- 多语言代码切换（```cpp+tab / ```java+tab …） ---------- */
