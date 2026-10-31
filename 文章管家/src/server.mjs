@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exec } from 'node:child_process';
 
-import { listPosts, readPost, savePost, taxonomy } from './posts.mjs';
+import { listPosts, readPost, savePost, updateTerms, taxonomy } from './posts.mjs';
 import { analyze, writePost, existingCategories } from './ingest.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -121,6 +121,20 @@ async function handleApi(req, res, url) {
         const status = err.code === 'NOT_FOUND' ? 404 : err.code === 'CONFLICT' ? 409 : err.code === 'INVALID' ? 422 : 500;
         return json(res, status, { error: err.message, code: err.code, problems: err.problems });
       }
+    }
+  }
+
+  // 拖拽：给某篇加 / 删一个标签或分类
+  if (parts[0] === 'api' && parts[1] === 'posts' && parts[3] === 'terms' && parts.length === 4) {
+    if (req.method !== 'POST') return json(res, 405, { error: '不支持的方法' });
+    const slug = decodeURIComponent(parts[2]);
+    const body = await readBody(req);
+    try {
+      const result = await updateTerms(slug, body.kind, body.name, body.action || 'add');
+      return json(res, 200, result);
+    } catch (err) {
+      const status = err.code === 'NOT_FOUND' ? 404 : err.code === 'INVALID' ? 422 : 500;
+      return json(res, status, { error: err.message, code: err.code });
     }
   }
 

@@ -204,6 +204,55 @@ export async function savePost(slug, payload) {
 
 // ---------- 分类 / 标签 ----------
 
+/**
+ * 给一篇文章增删**单个**标签或分类（界面里拖拽用）。
+ *
+ * 走的是和保存同一条 patchMeta 通道，所以同样只改那一行，
+ * 正文一个字节都不动。已经有的就返回 changed:false，不写文件。
+ *
+ * @param {string} slug
+ * @param {'tags'|'categories'} kind
+ * @param {string} name
+ * @param {'add'|'remove'} action
+ */
+export async function updateTerms(slug, kind, name, action) {
+  const key = kind === 'categories' ? 'categories' : kind === 'tags' ? 'tags' : null;
+  if (!key) throw Object.assign(new Error('只能是 tags 或 categories'), { code: 'INVALID' });
+
+  const term = String(name ?? '').trim();
+  if (!term) throw Object.assign(new Error('名称不能为空'), { code: 'INVALID' });
+  if (action !== 'add' && action !== 'remove') {
+    throw Object.assign(new Error('动作只能是 add 或 remove'), { code: 'INVALID' });
+  }
+
+  const current = await readPost(slug);
+  const raw = current.data[key];
+  const list = Array.isArray(raw) ? raw.map(String) : raw ? [String(raw)] : [];
+
+  let next;
+  if (action === 'add') {
+    if (list.includes(term)) return { changed: false, kind: key, terms: list, slug };
+    next = [...list, term];
+  } else {
+    next = list.filter((x) => x !== term);
+    if (next.length === list.length) return { changed: false, kind: key, terms: list, slug };
+    // 分类是必填项（validateMeta 也会拦，这里提前给一句人话）
+    if (key === 'categories' && next.length === 0) {
+      throw Object.assign(new Error('至少要留一个分类，不能把最后一个删掉'), { code: 'INVALID' });
+    }
+  }
+
+  const { content, changedKeys } = patchMeta(current.raw, { [key]: next });
+  if (changedKeys.length === 0) return { changed: false, kind: key, terms: next, slug };
+
+  const full = fileOf(slug);
+  const tmp = `${full}.tmp`;
+  await fs.writeFile(tmp, content, 'utf8');
+  await fs.rename(tmp, full);
+
+  return { changed: true, kind: key, terms: next, slug };
+}
+
 export async function taxonomy() {
   const { posts } = await listPosts();
   const catMap = new Map();

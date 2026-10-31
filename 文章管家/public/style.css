@@ -69,15 +69,22 @@ select {
   color: inherit;
 }
 
-/* ---------- 骨架 ---------- */
+/* ---------- 骨架 ----------
+ *
+ * 三列都靠 flex 排，宽度写进 CSS 变量（--side-w / --drawer-w），
+ * 拖动把手只负责改这两个变量 —— 主区域不用管，flex 自己会让出空间，
+ * 文章网格因为 auto-fill 会跟着重排。
+ */
 
 .app {
-  display: grid;
-  grid-template-columns: 188px 1fr;
+  display: flex;
+  align-items: stretch;
   min-height: 100vh;
 }
 
 .side {
+  flex: none;
+  width: var(--side-w, 188px);
   border-right: 1px solid var(--line);
   background: var(--bg-card);
   padding: 18px 12px;
@@ -142,7 +149,150 @@ select {
   word-break: break-all;
 }
 
+/* 拖拽调宽把手：可点区域 6px，平时完全透明，鼠标靠近才显出一条绿线 */
+.resizer {
+  flex: none;
+  width: 6px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 3;
+}
+
+.resizer::after {
+  content: '';
+  position: absolute;
+  inset: 0 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.resizer:hover::after,
+.resizer.active::after {
+  background: var(--accent);
+}
+
+/* 拖动时别让浏览器顺手选中文字 */
+body.resizing {
+  user-select: none;
+  cursor: col-resize;
+}
+
+/* ---------- 第二列（标签 / 分类抽屉） ---------- */
+
+.drawer {
+  flex: none;
+  width: var(--drawer-w, 188px);
+  background: var(--bg-card);
+  border-right: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 8px 6px 12px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.drawer-head .btn.tiny {
+  margin-left: auto;
+}
+
+.drawer-hint {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 0 12px 10px;
+  line-height: 1.5;
+}
+
+.drawer-list {
+  overflow: auto;
+  padding: 0 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  cursor: grab;
+  font-size: 13px;
+  border: 1px solid transparent;
+  min-width: 0;
+}
+
+.drawer-item:hover {
+  background: var(--chip-bg);
+}
+
+.drawer-item .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-item .count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+/* 分类用实心小方块、标签用小圆点，一眼区分两种抽屉 */
+.drawer-item .mark {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--accent);
+  flex: none;
+}
+
+.drawer-item[data-kind='tags'] .mark {
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.drawer-item.selected {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.drawer-item.selected .count {
+  color: inherit;
+  opacity: 0.7;
+}
+
+/* 文章拖到抽屉项上时的高亮 —— 和卡片上的落点用同一套视觉 */
+.drawer-item.drop-ok {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.drawer-empty {
+  padding: 20px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
 .main {
+  flex: 1;
   min-width: 0;
   padding: 22px 28px 60px;
 }
@@ -280,14 +430,40 @@ select:focus {
   max-width: 280px;
 }
 
+/* select 全局是 100% 宽（表单里需要），工具栏里要收回来 */
+.toolbar select {
+  width: auto;
+  min-width: 104px;
+}
+
+/* 文章格子墙：auto-fill 让它随侧栏 / 抽屉变宽变窄自动改变列数 */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+/* 点了抽屉里的标签 / 分类：不匹配的退到背景，但**不重排、不隐藏** */
+.grid.filtering .card {
+  opacity: 0.28;
+}
+
+.grid.filtering .card.match {
+  opacity: 1;
+}
+
 .card {
   border: 1px solid var(--line);
   background: var(--bg-card);
   border-radius: 10px;
-  padding: 16px 18px;
+  padding: 14px 15px;
   box-shadow: var(--shadow);
-  margin-bottom: 12px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  cursor: grab;
 }
 
 .card:hover {
@@ -295,18 +471,35 @@ select:focus {
   box-shadow: 0 2px 4px rgba(44, 44, 42, 0.05), 0 8px 20px rgba(15, 110, 86, 0.07);
 }
 
+.card.dragging {
+  opacity: 0.4;
+}
+
+/* 标签 / 分类拖到卡片上时的落点提示 */
+.card.drop-ok {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 .card-head {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: baseline;
+  min-width: 0;
 }
 
 .card-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.01em;
   margin: 0;
+  line-height: 1.45;
   cursor: pointer;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .card-title:hover {
@@ -316,7 +509,8 @@ select:focus {
 .card-desc {
   color: var(--muted);
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.55;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -325,18 +519,30 @@ select:focus {
 
 .card-meta {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   align-items: center;
-  margin-top: 10px;
-  font-size: 12px;
+  margin-top: auto;
+  padding-top: 10px;
+  font-size: 11px;
   color: var(--muted);
+}
+
+.card-meta .chip {
+  font-size: 11px;
+  padding: 0 7px;
 }
 
 .card-actions {
   display: flex;
   gap: 6px;
   margin-left: auto;
+}
+
+/* 格子里的按钮要收小，否则一张卡片被两个按钮占满 */
+.card-actions .btn {
+  padding: 1px 8px;
+  font-size: 11px;
 }
 
 .chip {
@@ -403,11 +609,18 @@ select:focus {
   color: var(--danger);
 }
 
-/* ---------- 编辑 ---------- */
+/* ---------- 编辑（现在是个悬浮窗，左右两栏） ---------- */
 
 .editor {
   display: grid;
+  grid-template-columns: minmax(0, 330px) minmax(0, 1fr);
   gap: 18px;
+  align-items: start;
+}
+
+.body-panel {
+  display: flex;
+  flex-direction: column;
 }
 
 .panel {
@@ -453,7 +666,7 @@ select:focus {
 }
 
 textarea.body {
-  min-height: 62vh;
+  min-height: 440px;
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.75;
@@ -617,6 +830,107 @@ textarea.body {
   color: var(--muted);
 }
 
+/* ---------- 悬浮窗（入库 / 编辑） ---------- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 22, 20, 0.44);
+  backdrop-filter: blur(2px);
+}
+
+.modal-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(900px, 100%);
+  max-height: calc(100vh - 48px);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+  animation: pop 0.14s ease-out;
+}
+
+.modal-card.wide {
+  width: min(1120px, 100%);
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.996);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.modal-head,
+.modal-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 18px;
+  background: var(--bg-card);
+  flex: none;
+}
+
+.modal-head {
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-foot {
+  border-top: 1px solid var(--line);
+}
+
+.modal-head strong {
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+
+.modal-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.modal-body {
+  padding: 18px;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.modal-foot .state {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.modal-foot .state.dirty {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.btn.tiny {
+  padding: 1px 8px;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+/* ---------- 空态 / 提示 ---------- */
+
 .empty {
   text-align: center;
   padding: 60px 20px;
@@ -654,12 +968,23 @@ textarea.body {
   display: none !important;
 }
 
-@media (max-width: 860px) {
-  .app {
+/* ---------- 窄屏 ---------- */
+
+@media (max-width: 1100px) {
+  /* 编辑窗的左右两栏在窄一点的屏幕上挤不下，直接摞起来 */
+  .editor {
     grid-template-columns: 1fr;
   }
+}
+
+@media (max-width: 860px) {
+  .app {
+    flex-direction: column;
+  }
+
   .side {
     position: static;
+    width: auto;
     height: auto;
     flex-direction: row;
     align-items: center;
@@ -668,17 +993,43 @@ textarea.body {
     border-bottom: 1px solid var(--line);
     padding: 10px;
   }
+
   .brand {
     padding: 0 10px;
   }
+
   .side-foot {
     display: none;
   }
+
+  /* 横排之后左右拖宽度就没意义了，把手直接藏掉 */
+  .resizer {
+    display: none;
+  }
+
+  .drawer {
+    position: static;
+    width: auto;
+    height: auto;
+    max-height: 210px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
   .main {
     padding: 18px 16px 50px;
   }
+
   .two-col,
   .row {
     grid-template-columns: 1fr;
+  }
+
+  .modal {
+    padding: 10px;
+  }
+
+  .modal-card {
+    max-height: calc(100vh - 20px);
   }
 }

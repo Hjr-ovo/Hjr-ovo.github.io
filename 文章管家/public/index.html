@@ -7,17 +7,39 @@
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
+    <!--
+      三列布局：
+        side   左侧栏（文章 / 入库 / 标签 / 分类）
+        drawer 第二列，点标签或分类才弹出来，宽度可拖、可记
+        main   文章格子墙，始终显示全部文章，不随导航切换而消失
+      入库和编辑都不是「页面」，而是盖在 main 上面的悬浮窗。
+    -->
     <div class="app">
-      <aside class="side">
+      <aside class="side" id="side">
         <div class="brand"><i></i>文章管家</div>
-        <button class="nav-item" data-view="list" aria-current="true">文章</button>
-        <button class="nav-item" data-view="ingest">入库</button>
+        <button class="nav-item" data-nav="posts" aria-current="true">文章</button>
+        <button class="nav-item" data-nav="ingest">入库</button>
+        <button class="nav-item" data-nav="tags">标签</button>
+        <button class="nav-item" data-nav="categories">分类</button>
         <div class="side-foot" id="dirHint">正在读取…</div>
       </aside>
 
+      <div class="resizer" id="resizerSide" title="拖动调整左侧栏宽度（双击复位）"></div>
+
+      <section class="drawer" id="drawer" hidden>
+        <div class="drawer-head">
+          <span id="drawerTitle">标签</span>
+          <button class="btn ghost tiny" id="drawerClose" title="收起（Esc）">×</button>
+        </div>
+        <div class="drawer-hint" id="drawerHint">把左边的项拖到文章上，或把文章拖进这里</div>
+        <div class="drawer-list" id="drawerList"></div>
+      </section>
+
+      <div class="resizer" id="resizerDrawer" hidden title="拖动调整这一列宽度（双击复位）"></div>
+
       <main class="main">
         <div class="topbar">
-          <h1 id="pageTitle">文章</h1>
+          <h1 id="pageTitle">全部文章</h1>
           <span class="grow"></span>
           <span class="status" title="站点本地预览是否在运行">
             <span class="dot" id="devDot"></span><span id="devText">检测中</span>
@@ -25,104 +47,41 @@
           <span class="status" id="stats">—</span>
         </div>
 
-        <!-- ========== 文章列表 ========== -->
-        <section id="view-list">
-          <div class="toolbar">
-            <input type="search" id="search" placeholder="搜索标题、标签、文件名" />
-            <select id="filterCat" style="width: auto; min-width: 110px">
-              <option value="">全部分类</option>
-            </select>
-            <select id="sortBy" style="width: auto; min-width: 110px">
-              <option value="date">按日期</option>
-              <option value="title">按标题</option>
-              <option value="chars">按字数</option>
-            </select>
-            <span class="grow"></span>
-            <button class="btn" id="btnReload">刷新</button>
-            <button class="btn primary" data-goto="ingest">入库新文章</button>
-          </div>
-          <div id="postList"></div>
-        </section>
+        <div class="toolbar">
+          <input type="search" id="search" placeholder="搜索标题、标签、文件名" />
+          <select id="sortBy">
+            <option value="date">按日期</option>
+            <option value="title">按标题</option>
+            <option value="chars">按字数</option>
+          </select>
+          <span class="grow"></span>
+          <button class="btn" id="btnReload">刷新</button>
+          <button class="btn primary" id="btnOpenIngest">入库新文章</button>
+        </div>
 
-        <!-- ========== 单篇编辑 ========== -->
-        <section id="view-edit" hidden>
-          <div class="toolbar">
-            <button class="btn ghost" id="btnBack">← 返回列表</button>
-            <span class="grow"></span>
-            <span class="chip" id="editSlug"></span>
-            <button class="btn" id="btnOpenPost">在站点打开</button>
-          </div>
+        <div class="grid" id="postGrid"></div>
+      </main>
+    </div>
 
-          <div class="editor">
-            <div class="panel">
-              <h2>元数据（frontmatter）</h2>
+    <!-- ==================== 入库悬浮窗 ==================== -->
+    <div class="modal" id="modalIngest" hidden>
+      <div class="modal-mask" data-close="ingest"></div>
+      <div class="modal-card wide">
+        <header class="modal-head">
+          <strong>入库新文章</strong>
+          <span class="modal-sub">拖一个 .md 进来，先看诊断，再决定写不写</span>
+          <span class="grow"></span>
+          <button class="btn ghost tiny" data-close="ingest" title="关闭（Esc）">×</button>
+        </header>
 
-              <div class="field">
-                <label for="fTitle">标题</label>
-                <input type="text" id="fTitle" />
-              </div>
-
-              <div class="field">
-                <label for="fDesc">摘要（会显示在列表和搜索结果里，必填）</label>
-                <textarea id="fDesc" rows="3"></textarea>
-              </div>
-
-              <div class="row">
-                <div class="field">
-                  <label for="fDate">发布日期</label>
-                  <input type="date" id="fDate" />
-                </div>
-                <div class="field">
-                  <label for="fUpdated">更新日期（不填就不显示）</label>
-                  <input type="date" id="fUpdated" />
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="fCats">分类（至少一个，多个用逗号隔开）</label>
-                <input type="text" id="fCats" placeholder="例如：数据结构, 算法" />
-                <div class="picker" id="pickCats"></div>
-              </div>
-
-              <div class="field">
-                <label for="fTags">标签（可空，多个用逗号隔开）</label>
-                <input type="text" id="fTags" placeholder="例如：哈希表, 冲突处理" />
-                <div class="picker" id="pickTags"></div>
-              </div>
-
-              <div class="field">
-                <label class="switch">
-                  <input type="checkbox" id="fDraft" />
-                  <span>存为草稿（不生成页面、不进列表）</span>
-                </label>
-              </div>
-            </div>
-
-            <div class="panel">
-              <h2>正文（Markdown，一个字都不会被工具改动）</h2>
-              <textarea class="body" id="fBody" spellcheck="false"></textarea>
-              <div class="hint" style="font-size: 12px; color: var(--muted); margin-top: 6px">
-                改正文建议还是回 Obsidian 改；这里适合修错别字。
-              </div>
-            </div>
-
-            <div class="savebar">
-              <button class="btn primary" id="btnSave">保存</button>
-              <button class="btn" id="btnReloadPost">重新从磁盘读</button>
-              <span class="state" id="saveState">没有改动</span>
-            </div>
-          </div>
-        </section>
-
-        <!-- ========== 入库 ========== -->
-        <section id="view-ingest" hidden>
+        <div class="modal-body">
           <div class="drop" id="drop">
             <strong>把 .md 文件拖到这里</strong>
             或者点一下选文件。只读不写，先告诉你会发生什么。
             <input type="file" id="fileInput" accept=".md,.markdown,text/markdown" hidden />
           </div>
 
-          <div id="ingestBody" hidden style="margin-top: 20px">
+          <div id="ingestBody" hidden>
             <div class="two-col">
               <div class="panel">
                 <h2>诊断：这篇会发生什么</h2>
@@ -189,8 +148,84 @@
               <div class="preview" id="bodyPreview"></div>
             </div>
           </div>
-        </section>
-      </main>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 编辑悬浮窗 ==================== -->
+    <div class="modal" id="modalEdit" hidden>
+      <div class="modal-mask" data-close="edit"></div>
+      <div class="modal-card wide">
+        <header class="modal-head">
+          <strong>编辑文章</strong>
+          <span class="chip" id="editSlug"></span>
+          <span class="grow"></span>
+          <button class="btn" id="btnOpenPost">在站点打开</button>
+          <button class="btn ghost" id="btnReloadPost">重新读盘</button>
+          <button class="btn ghost tiny" data-close="edit" title="关闭（Esc）">×</button>
+        </header>
+
+        <div class="modal-body">
+          <div class="editor">
+            <div class="panel">
+              <h2>元数据（frontmatter）</h2>
+
+              <div class="field">
+                <label for="fTitle">标题</label>
+                <input type="text" id="fTitle" />
+              </div>
+
+              <div class="field">
+                <label for="fDesc">摘要（会显示在列表和搜索结果里，必填）</label>
+                <textarea id="fDesc" rows="3"></textarea>
+              </div>
+
+              <div class="row">
+                <div class="field">
+                  <label for="fDate">发布日期</label>
+                  <input type="date" id="fDate" />
+                </div>
+                <div class="field">
+                  <label for="fUpdated">更新日期（不填就不显示）</label>
+                  <input type="date" id="fUpdated" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="fCats">分类（至少一个，多个用逗号隔开）</label>
+                <input type="text" id="fCats" placeholder="例如：数据结构, 算法" />
+                <div class="picker" id="pickCats"></div>
+              </div>
+
+              <div class="field">
+                <label for="fTags">标签（可空，多个用逗号隔开）</label>
+                <input type="text" id="fTags" placeholder="例如：哈希表, 冲突处理" />
+                <div class="picker" id="pickTags"></div>
+              </div>
+
+              <div class="field">
+                <label class="switch">
+                  <input type="checkbox" id="fDraft" />
+                  <span>存为草稿（不生成页面、不进列表）</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="panel body-panel">
+              <h2>正文（Markdown，一个字都不会被工具改动）</h2>
+              <textarea class="body" id="fBody" spellcheck="false"></textarea>
+              <div class="hint">改正文建议还是回 Obsidian 改；这里适合修错别字。</div>
+            </div>
+          </div>
+        </div>
+
+        <footer class="modal-foot">
+          <span class="state" id="saveState">没有改动</span>
+          <span class="grow"></span>
+          <button class="btn" data-close="edit">关闭</button>
+          <button class="btn primary" id="btnSave">保存（Ctrl+S）</button>
+        </footer>
+      </div>
     </div>
 
     <div class="toast" id="toast"></div>
