@@ -285,17 +285,36 @@ main {
   opacity: 0.75;
 }
 
-/* ---------- 标题 ---------- */
-
+/* ---------- 标题 ----------
+ * 2026-10-31 整体加重。原来四级标题一律 font-weight: 500，层级全靠字号差
+ * （1.65 / 1.3 / 1.1 / 1rem），中文在 500 下看着发虚，扫读长文时抓不住。
+ * 现在字重分档 700 / 700 / 600 / 600，字号各提一档 ——
+ * 标题是唯一能被"跳着读"命中的东西，值得这几十毫秒的视觉停顿。
+ */
 h1, h2, h3, h4 {
   line-height: 1.35;
-  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.01em; /* 中英混排时收紧一点，看着更实 */
   margin: 2em 0 0.6em;
 }
 
-h1 { font-size: 1.65rem; margin-top: 0; }
-h2 { font-size: 1.3rem; }
-h3 { font-size: 1.1rem; }
+h1 { font-size: 1.85rem; font-weight: 700; margin-top: 0; }
+h2 { font-size: 1.45rem; font-weight: 700; }
+h3 { font-size: 1.2rem; font-weight: 600; }
+h4 { font-size: 1.05rem; font-weight: 600; }
+
+/* 正文里的 h2（= 文章的主要章节）额外挂一根绿条。
+ * 只靠字号和字重，h2 和「加粗的段落」在长文里还是会混；竖条是最省地方、
+ * 最不容易误读的层级信号，也和文章卡片 hover 时冒出的绿条是同一套语言。
+ * 负 margin 抵消 padding-left，标题文字左缘仍与正文对齐，绿条落在左侧留白里。
+ * （只给 .post-body 内的 h2，避免「相关文章」「关于页章节」也长出绿条。）
+ */
+.post-body h2 {
+  padding-left: 0.8rem;
+  /* 减掉 3px 边框宽度，否则标题文字会比正文段落右偏 3px，长文里看得出来 */
+  margin-left: calc(-0.8rem - 3px);
+  border-left: 3px solid var(--accent);
+}
 
 /* 首页顶部的一句话介绍。让列表上方有点"人味"，
    也顺便解释这个站是干什么的 —— 混进来的陌生人一眼能看懂。 */
@@ -1515,7 +1534,7 @@ article img {
 /* 小手机：标题降一档，长标题不至于占掉半屏 */
 @media (max-width: 480px) {
   h1 {
-    font-size: 1.45rem;
+    font-size: 1.65rem;
   }
 
   .post-item h2 {
