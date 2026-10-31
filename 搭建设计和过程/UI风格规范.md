@@ -76,7 +76,15 @@
 - 强调色在深色必须提亮（`#0f6e56` → `#6ed3ad`），否则深底上看不见。
 - 代码高亮（Shiki 双主题）用 `!important` 覆盖内联样式：
   `[data-theme='dark'] .astro-code, [data-theme='dark'] .astro-code span { color: var(--shiki-dark) !important; ... }`
-- `<meta name="color-scheme" content="light dark">` 让原生控件（滚动条等）也跟随。
+- `<meta name="color-scheme" content="light dark">` 只是告诉浏览器「两种配色都支持」。
+  **必须再在 `:root` 显式写 `color-scheme: light`、深色块写 `color-scheme: dark`** ——
+  只写 meta 的话原生控件（滚动条、input、select）跟的是**操作系统**配色，
+  系统深色 + 用户手动切回白天时，滚动条会顽固地保持深色。
+- 滚动条：颜色提成 `--scroll-thumb` / `--scroll-thumb-hover` 两个变量（浅色 `#d3d0c3`/`#b3b0a2`，
+  深色 `#3b3e37`/`#4f534a`），`::-webkit-scrollbar` 宽 10px、轨道透明、滑块圆角 +
+  `2px solid transparent` 描边 + `background-clip: padding-box`（视觉 6px）。
+  Firefox 走 `@supports (-moz-appearance: none)` 里的 `scrollbar-width: thin` + `scrollbar-color`
+  —— **不能无条件写**，Chrome 121+ 也认这两个属性，会盖掉伪元素的圆角内缩。
 
 ---
 

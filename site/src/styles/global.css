@@ -25,6 +25,8 @@
   --chip-bg: #f1efe8; /* 次要标签（灰色胶囊）的底 */
   --table-head-bg: #f7f6f1;
   --placeholder: #a5a39c;
+  --scroll-thumb: #d3d0c3; /* 滚动条滑块（自定义样式见文件下方「滚动条」一节） */
+  --scroll-thumb-hover: #b3b0a2;
   --shadow-card:
     0 1px 2px rgba(44, 44, 42, 0.04),
     0 4px 12px rgba(44, 44, 42, 0.035);
@@ -35,6 +37,11 @@
   --maxw: 46rem;
   --font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
+
+  /* ⚠️ 这一行不能省：head 里有 <meta name="color-scheme" content="light dark">，
+     根元素不显式声明的话，原生控件（滚动条、input、select）会跟随**系统**配色，
+     而不是本站主题 —— 系统深色 + 用户手动切回白天时，滚动条仍是深色的。 */
+  color-scheme: light;
 }
 
 /* ---------- 深色主题 ----------
@@ -59,6 +66,8 @@
   --chip-bg: #262a25;
   --table-head-bg: #1d201c;
   --placeholder: #74746c;
+  --scroll-thumb: #3b3e37;
+  --scroll-thumb-hover: #4f534a;
   --shadow-card:
     0 1px 2px rgba(0, 0, 0, 0.45),
     0 4px 12px rgba(0, 0, 0, 0.3);
@@ -68,6 +77,58 @@
 
   /* 让浏览器把滚动条、搜索框清除按钮这些原生控件也切成深色 */
   color-scheme: dark;
+}
+
+/* ---------- 滚动条 ----------
+ * 颜色走变量（--scroll-thumb / --scroll-thumb-hover），白天暖灰、深色暗灰，
+ * 只写一套规则就能两头都对 —— 别再单独给深色写一份，那样切回白天就漏了。
+ *
+ * Blink / WebKit 认 ::-webkit-scrollbar 伪元素，能做圆角 + 内缩（看着比原生细）；
+ * Firefox 不认伪元素，只认 scrollbar-width / scrollbar-color。
+ * 后者必须用 @supports 圈起来给 Firefox 专用：Chrome 121+ 也实现了这两个属性，
+ * 无条件写会让它改用原生细滚动条，把上面的圆角和内缩全盖掉。
+ */
+@supports (-moz-appearance: none) {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) transparent;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: 999px;
+  /* 透明描边 + padding-box 裁切 = 滑块两侧留白，视觉上比 10px 细 */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-hover);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 目录侧栏是常驻的窄容器，10px 太粗，收成 6px（描边也跟着减到 1px，
+   否则 6px 减掉两侧 2px 只剩 2px 的滑块） */
+.toc::-webkit-scrollbar {
+  width: 6px;
+}
+
+.toc::-webkit-scrollbar-thumb {
+  border-width: 1px;
 }
 
 * {
