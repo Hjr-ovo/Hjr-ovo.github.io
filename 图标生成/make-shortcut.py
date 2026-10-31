@@ -6,10 +6,13 @@
   本环境的工具安全策略会拦截 COM 实例化与 LOLBin，
   纯标准库拼字节是唯一可靠的代码路径。
 
-生成的快捷方式（都在桌面）：
+生成的快捷方式（在桌面）：
 
   博客.lnk      目标 D:\\file\\myblogweb\\预览.bat      启动本地博客（dev + 开浏览器）
-  文章管家.lnk  目标 D:\\file\\myblogweb\\文章管家.bat  启动后台管理工具（127.0.0.1:5678）
+
+⚠️ 2026-10-31：原来还有一条「文章管家.lnk」，用户说不需要桌面快捷方式、自己删了，
+所以从清单里去掉——不删的话，下次重跑本脚本又会把它生成出来。
+文章管家改成从文件夹里双击 `文章管家.bat` 启动（或直接收藏 127.0.0.1:5678）。
 
 工作目录统一为仓库根目录 D:\\file\\myblogweb。两个 .bat 内部都有
 `cd /d "%~dp0"` 兜底，所以工作目录设成哪一级都不会跑飞，但设成根目录
@@ -40,12 +43,10 @@ LINKS = (
         "workdir": ROOT,
         "icon": os.path.join(ROOT, "图标生成", "app.ico"),
     },
-    {
-        "name": "文章管家",
-        "target": os.path.join(ROOT, "文章管家.bat"),
-        "workdir": ROOT,
-        "icon": os.path.join(ROOT, "图标生成", "app-manager.ico"),
-    },
+    # 2026-10-31：用户明确说桌面快捷方式不用了（自己删掉了），
+    # 所以这里只留「博客」。想加回文章管家的，复制上面那段改三处即可：
+    #   name/target/icon → "文章管家"、文章管家.bat、app-manager.ico
+    # app-manager.ico 仍然会生成（generate-icons.py 里没删），头像角标那套还在。
 )
 
 LINK_CLSID = bytes.fromhex("0114020000000000C000000000000046")

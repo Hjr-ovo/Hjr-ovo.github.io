@@ -22,9 +22,8 @@
 | `site/public/apple-touch-icon.png` | iOS「添加到主屏」（180） |
 | `site/public/icon-192.png` / `icon-512.png` | Android Chrome / PWA（192/512） |
 | `图标生成/app.ico` | Windows 快捷方式大图标（16/32/48/64/128/256） |
-| `图标生成/app-manager.ico` | 同上六档，右下角多一枚墨绿角标（给「文章管家」用） |
+| `图标生成/app-manager.ico` | 同上六档，右下角多一枚墨绿角标（给文章管家预留，**目前不挂快捷方式**） |
 | `桌面\博客.lnk` | 一键启动本地博客（指向根目录 `预览.bat`） |
-| `桌面\文章管家.lnk` | 一键启动后台管理工具（指向根目录 `文章管家.bat`） |
 
 > 2026-10-30：博客后台工具已删除，原先它那套 favicon（`博客后台工具/public/`）
 > 和 `app.ico` 一起消失。现在 `app.ico` 就地产在 `图标生成/` 下，只给
