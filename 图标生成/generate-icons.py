@@ -12,6 +12,8 @@
   site/public/icon-512.png           512（Android Chrome / PWA）
   图标生成/app.ico                   16/32/48/64/128/256（Windows 快捷方式大图标，
                                      桌面「博客」快捷方式用，见 make-shortcut.py）
+  图标生成/app-manager.ico           同上六档（桌面「文章管家」快捷方式用，
+                                     底图同头像 + 右下角墨绿角标，便于区分）
 
 两条硬规矩（来自踩坑）：
   1. ICO 必须自拼容器 —— Pillow 的 ICO 保存只认一张母图再统一 resize，
@@ -26,7 +28,7 @@ import os
 import struct
 import sys
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "logo.png")
@@ -38,6 +40,10 @@ SITE_PUBLIC = os.path.join(ROOT, "site", "public")
 # （2026-10-30 博客后台工具已删除，原先放在「博客后台工具/app.ico」，
 #   现在快捷方式指向根目录的 预览.bat，图标就近放本目录。）
 SHORTCUT_ICON = os.path.join(HERE, "app.ico")
+
+# 「文章管家」桌面快捷方式图标。和«博客»用同一张头像做家族标识，
+# 只在右下角加一枚角标区分功能——两个快捷方式同图标在桌面上会分不清。
+MANAGER_ICON = os.path.join(HERE, "app-manager.ico")
 
 
 # ---------------------------------------------------------------
@@ -82,6 +88,57 @@ def build_icon(size: int) -> Image.Image:
 
 
 # ---------------------------------------------------------------
+# 「文章管家」图标：头像 + 右下角标
+# ---------------------------------------------------------------
+
+# 角标底色取站点的 --accent（墨绿 #0F6E56），和站点、管家界面同一套色。
+BADGE_FILL = (15, 110, 86, 255)
+BADGE_RING = (255, 255, 255, 235)   # 白色描边：头像本身是暖白纸底，没这圈角标会糊进背景
+BADGE_INK = (255, 255, 255, 255)
+
+# 小于这个尺寸不再画三条横线：16px 上角标只有 3px 高，横线必然糊成一块。
+# 但角标本体仍然保留——纯色小圆挤在小图标里虽然简陋，至少还能一眼看出
+# 它和«博客»不是同一个程序；完全不画的话，桌面切"小图标"视图就彻底分不清了。
+BARS_MIN_SIZE = 24
+
+
+def build_manager_icon(size: int) -> Image.Image:
+    """头像 + 右下角墨绿圆形角标（内含三条白横线，取「列表 / 管理」意象）。
+
+    ⚠️ 角标必须先在 4 倍画布上画完再缩回目标尺寸：直接按 size 画圆和横线，
+    32px 下边缘全是台阶状锯齿。缩回来不做二次锐化——头像那层已经锐过一次，
+    再锐会过头起白边。
+    """
+    base = build_icon(size)
+
+    scale = 4
+    S = size * scale
+    layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+
+    r = int(S * 0.195)                     # 角标半径
+    cx = cy = S - r - int(S * 0.045)       # 圆心靠右下，外缘留约 2.5% 安全边
+    ring = max(1, int(S * 0.03))           # 白色描边宽度
+
+    d.ellipse([cx - r - ring, cy - r - ring, cx + r + ring, cy + r + ring], fill=BADGE_RING)
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=BADGE_FILL)
+
+    if size >= BARS_MIN_SIZE:
+        # 三条横线用圆角矩形而不是 line()：line 是平头，缩到 32px 会显尖。
+        bar_h = max(2, int(r * 0.26))
+        half = int(r * 0.52)
+        for frac in (-0.44, 0.0, 0.44):
+            y = cy + int(r * frac)
+            d.rounded_rectangle(
+                [cx - half, y - bar_h // 2, cx + half, y + bar_h // 2],
+                radius=bar_h // 2,
+                fill=BADGE_INK,
+            )
+
+    return Image.alpha_composite(base, layer.resize((size, size), Image.LANCZOS))
+
+
+# ---------------------------------------------------------------
 # 自拼 ICO 容器
 # ---------------------------------------------------------------
 
@@ -107,12 +164,12 @@ def _dib_bytes(im: Image.Image) -> bytes:
     return header + b"".join(rows)
 
 
-def write_ico(path: str, sizes) -> None:
+def write_ico(path: str, sizes, builder=build_icon) -> None:
     """把每档成品图原样嵌进 ICO 容器（分档策略由此保住）。"""
     entries, blobs = [], []
     offset = 6 + 16 * len(sizes)
     for size in sizes:
-        im = build_icon(size)
+        im = builder(size)
         if size >= 128:
             buf = io.BytesIO()
             im.save(buf, format="PNG")
@@ -179,12 +236,12 @@ def check_ico_structure(ico_path: str, sizes) -> None:
     print(f"[OK] {os.path.basename(ico_path)} 目录项与数据块结构一致（{len(sizes)} 档）")
 
 
-def verify_ico(ico_path: str, sizes) -> None:
+def verify_ico(ico_path: str, sizes, builder=build_icon) -> None:
     ico = Image.open(ico_path)
     for s in sizes:
         ico.size = (s, s)
         ico.load()
-        expect = build_icon(s)
+        expect = builder(s)
         from PIL import ImageChops
         d = ImageChops.difference(ico.convert("RGBA"), expect).getbbox()
         if d is not None:
@@ -206,9 +263,15 @@ def main() -> None:
     verify_ico(os.path.join(SITE_PUBLIC, "favicon.ico"), (16, 32, 48, 64))
 
     # ---- Windows 快捷方式大图标 ----
-    write_ico(SHORTCUT_ICON, (16, 32, 48, 64, 128, 256))
-    check_ico_structure(SHORTCUT_ICON, (16, 32, 48, 64, 128, 256))
-    verify_ico(SHORTCUT_ICON, (16, 32, 48, 64, 128, 256))
+    SIX = (16, 32, 48, 64, 128, 256)
+    write_ico(SHORTCUT_ICON, SIX)
+    check_ico_structure(SHORTCUT_ICON, SIX)
+    verify_ico(SHORTCUT_ICON, SIX)
+
+    # ---- 「文章管家」快捷方式图标（头像 + 角标）----
+    write_ico(MANAGER_ICON, SIX, build_manager_icon)
+    check_ico_structure(MANAGER_ICON, SIX)
+    verify_ico(MANAGER_ICON, SIX, build_manager_icon)
 
     print("全部图标生成完毕。")
 

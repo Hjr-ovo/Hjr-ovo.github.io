@@ -22,11 +22,16 @@
 | `site/public/apple-touch-icon.png` | iOS「添加到主屏」（180） |
 | `site/public/icon-192.png` / `icon-512.png` | Android Chrome / PWA（192/512） |
 | `图标生成/app.ico` | Windows 快捷方式大图标（16/32/48/64/128/256） |
+| `图标生成/app-manager.ico` | 同上六档，右下角多一枚墨绿角标（给「文章管家」用） |
 | `桌面\博客.lnk` | 一键启动本地博客（指向根目录 `预览.bat`） |
+| `桌面\文章管家.lnk` | 一键启动后台管理工具（指向根目录 `文章管家.bat`） |
 
 > 2026-10-30：博客后台工具已删除，原先它那套 favicon（`博客后台工具/public/`）
 > 和 `app.ico` 一起消失。现在 `app.ico` 就地产在 `图标生成/` 下，只给
 > 桌面«博客»快捷方式用；快捷方式目标改为根目录的 `预览.bat`。
+>
+> 2026-10-31：新建了 `文章管家/` 之后新增 `app-manager.ico` —— 两个快捷方式
+> 用同一张图标在桌面上根本分不出谁是谁，所以后者叠了一枚角标（见下）。
 
 旧文件 `site/public/favicon.svg`（早期自绘矢量图形）**已删除**，
 `BaseLayout.astro` 里的 svg 引用同步移除——不删的话支持 svg favicon 的
@@ -44,6 +49,20 @@
 - **分档锐化**：≥64px 轻锐（45%）、32–63px 中锐（70%）、≤16px 重锐（90%）——
   位图缩到 16px 必然发软，不锐化等于糊成一团色块。
 
+## 「文章管家」角标（`build_manager_icon`）
+
+底图和 `app.ico` 完全相同（同一张头像 = 家族标识），只在右下角叠一枚
+墨绿圆形角标（`--accent` `#0F6E56`），内含三条白横线。三条线是「列表」的意象，
+对应文章管家「管理文章列表」这件事。
+
+- **必须 4 倍超采样**：在 `size*4` 的画布上画圆和线，再 LANCZOS 缩回目标尺寸。
+  直接按目标尺寸画，32px 下圆边和线头全是台阶状锯齿。
+- **白色描边圈**（`ring = S*0.03`）：头像本身是暖白纸底，没有这圈角标会糊进背景；
+  换成深色壁纸时它又能把角标和壁纸分开。
+- **16px 不画横线、只留纯色角标**：16px 上角标仅 3px 高，三条线必然糊成一块。
+  但完全省略角标也不行 —— 桌面切「小图标」视图时两个快捷方式会变得一模一样。
+- 缩回来**不做二次锐化**：头像那层已经锐过一次，再锐会过头起白边。
+
 ## 为什么 ICO 要自己拼容器
 
 Pillow 的 ICO 保存只接受一张母图，再按 `sizes` 逐档 `resize`——
@@ -56,10 +75,26 @@ Pillow 的 ICO 保存只接受一张母图，再按 `sizes` 逐档 `resize`—�
 
 本环境工具安全策略拦截 COM 实例化（`WScript.Shell`）和 LOLBin，
 `make-shortcut.py` 按 MS-SHLLINK 规范纯 `struct` 拼字节：
-76 字节 Header（注意有 Reserved3，官方 HeaderSize 才是 0x4C）+
-RelativePath / WorkingDir / IconLocation 三个字符串块（GBK 编码，
-不设 IsUnicode flag 时按系统 ANSI 代码页解释）。
-生成后脚本会读回来自检三个字段。
+
+```
+Header(76 字节，注意有 Reserved3，官方 HeaderSize 才是 0x4C)
+  ↓
+LinkInfo（LinkInfoSize|HeaderSize=0x1C|Flags=1|四个偏移 + VolumeID + LocalBasePath + 空后缀）
+  ↓
+StringData × 3：RelativePath / WorkingDir / IconLocation（GBK 编码，
+                不设 IsUnicode flag 时按系统 ANSI 代码页解释）
+```
+
+**⚠️ 目标路径必须写进 LinkInfo 的 `LocalBasePath`。** 桌面在 C:、仓库在 D:，
+跨盘符写不出真正的相对路径。早先的版本只写了 `RelativePath` 字段、往里塞绝对路径，
+虽然 Shell 容错能吃下，但那是错的字段位置；现在两处各写一份，
+Shell 优先用 LinkInfo，万一看不到还有 RelativePath 兜底。
+
+生成后脚本读回、按字段逐个 assert：LinkInfo 的目标、RelativePath、WorkingDir、
+IconLocation 四项全对才算通过。
+
+**没能验证的部分**：双击 .lnk 能否真正拉起程序，本环境测不了 ——
+工具安全策略拒绝创建外部进程（`cmd start` 直接返回「拒绝访问」）。
 
 ## 验收记录（2026-10-15）
 
