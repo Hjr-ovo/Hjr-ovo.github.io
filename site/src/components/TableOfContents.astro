@@ -5,8 +5,11 @@
 // 收集标题树，每项含 { depth, text, slug }，不用自己写正则抠标题。
 // slug 同时用于锚点跳转：Astro 渲染出的标题元素自带同款 id。
 //
-// 只收 h2/h3：h1 是文章大标题（页面顶部已经有了），h4 以下太细碎。
-// 标题少于两个就整个不显示 —— 一个章节的目录不如没有。
+// 只收 h2/h3/h4：h1 是文章大标题（页面顶部已经有了）。
+// h4 也收进来（2026-10-31 从「只收 h2/h3」放开）——
+// 算法类长文的细节都挂在四级标题下（“线性探测”“二次探测”…），
+// 不收的话读者滚到那一带时目录里没有对应条目，等于失去了定位作用。
+// （Obsidian 自己的大纲面板也是全部层级都列的。）
 
 interface Props {
   headings: { depth: number; text: string; slug: string }[];
@@ -14,7 +17,7 @@ interface Props {
 
 const { headings } = Astro.props;
 
-const items = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
+const items = headings.filter((h) => h.depth >= 2 && h.depth <= 4);
 ---
 
 {
@@ -61,8 +64,31 @@ const items = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
       links.set(id, a as HTMLAnchorElement);
     });
 
+    // 目录长了以后（本文收 4 级标题，动辄五六十条），当前项很容易滚出侧栏
+    // 可视区 —— 那样「跟着走」就名存实亡了。所以每次切换当前项时，
+    // 把它拉到侧栏垂直居中的位置，和 Obsidian 大纲面板的行为一致。
+    //
+    // 只在目录自己确实能滚（内容高过侧栏）时才动，否则会带着整个页面跳。
+    const keepVisible = (a: HTMLAnchorElement) => {
+      if (toc.scrollHeight <= toc.clientHeight + 8) return;
+      const linkRect = a.getBoundingClientRect();
+      const boxRect = toc.getBoundingClientRect();
+      const center = boxRect.top + boxRect.height / 2;
+      // 已经在中间区域里就别动，避免每次切换都微调、看着像抖
+      if (Math.abs(linkRect.top + linkRect.height / 2 - center) < boxRect.height * 0.3) {
+        return;
+      }
+      const delta = linkRect.top + linkRect.height / 2 - center;
+      toc.scrollTo({ top: toc.scrollTop + delta, behavior: 'smooth' });
+    };
+
     const setActive = (id: string | null) => {
-      links.forEach((a, key) => a.classList.toggle('active', key === id));
+      links.forEach((a, key) => {
+        const on = key === id;
+        // 只在状态真的变化时才滚动，避免反复触发
+        if (on && !a.classList.contains('active')) keepVisible(a);
+        a.classList.toggle('active', on);
+      });
     };
 
     const observer = new IntersectionObserver(

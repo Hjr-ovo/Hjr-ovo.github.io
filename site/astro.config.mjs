@@ -13,6 +13,10 @@ import rehypeKatex from 'rehype-katex';
 // 到 rehype 时原始代码块已经被替换掉了（详见该文件顶部注释）。
 import remarkCodeTabs from './src/utils/remark-code-tabs.mjs';
 
+// Obsidian 格式适配：==高亮== → <mark>、正文 h1 整体降级（让章节进入右侧目录）。
+// 为什么也在 remark 阶段：同 code-tabs，Shiki 高亮后会拿不到原始文本结构。
+import remarkObsidian from './src/utils/remark-obsidian.mjs';
+
 // 文章改名后的「旧地址 → 新地址」对照表（见 技术架构.md 5.5.2）。
 // 静态站没有服务端，改名会让旧链接直接 404；
 // 这个表让 Astro 在构建时给每个旧地址生成一个跳转页，顶替那个位置。
@@ -46,7 +50,7 @@ export default defineConfig({
     //   remark 阶段：认出「这是数学」→ 交给后面
     //   rehype 阶段：变成真正的 HTML 结构
     // 顺序也不能反 —— remark 处理 Markdown，rehype 处理 HTML，是流水线的两段。
-    remarkPlugins: [remarkMath, remarkCodeTabs],
+    remarkPlugins: [remarkMath, remarkObsidian, remarkCodeTabs],
     rehypePlugins: [rehypeKatex],
   },
 });

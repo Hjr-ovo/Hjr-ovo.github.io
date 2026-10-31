@@ -12,29 +12,47 @@
 import { defineCollection, z } from 'astro:content';
 import { glob } from 'astro/loaders';
 
+// 文章 frontmatter 的校验规则。
+//
+// ⚠️ 外面套了一层 z.preprocess，作用是**字段别名**，不是改规则：
+//   Obsidian 导出的笔记用 `date` / `explain`，站点要的是 `pubDate` / `description`。
+//   这层在「校验之前」把别名映射成正式字段名，所以下面 schema 里
+//   仍然只认 pubDate / description 两个真名，类型也和原来完全一样。
+//   这样从 Obsidian 整篇复制过来的文章，不用手改字段名也能直接跑。
+const postsSchema = z.object({
+  // ---- 必填 ----
+  title: z.string(),
+  description: z.string(),
+  pubDate: z.coerce.date(),
+  // 分类：一篇文章可以属于多个分类（2026-10-18 从单值 category 改来）。
+  // 至少留一个 —— 没有分类的文章在分类页里会成孤儿。
+  // min(1) 而不是 default([])：空数组等于没分类，必须是作者有意为之，
+  // 而"无意漏写"和"有意不放"要能区分开，所以不给默认值。
+  categories: z.array(z.string()).min(1),
+
+  // ---- 选填 ----
+  // updatedDate 不写就不显示（不是每篇文章都会更新）
+  updatedDate: z.coerce.date().optional(),
+  // 标签可以以后再加
+  tags: z.array(z.string()).default([]),
+  // draft: true 的文章不会出现在列表和页面里，方便"写了但先不发"
+  draft: z.boolean().default(false),
+});
+
 const posts = defineCollection({
   // 文章存在 src/content/posts/ 下，一篇文章一个 .md 文件
   loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/posts' }),
 
-  schema: z.object({
-    // ---- 必填 ----
-    title: z.string(),
-    description: z.string(),
-    pubDate: z.coerce.date(),
-    // 分类：一篇文章可以属于多个分类（2026-10-18 从单值 category 改来）。
-    // 至少留一个 —— 没有分类的文章在分类页里会成孤儿。
-    // min(1) 而不是 default([])：空数组等于没分类，必须是作者有意为之，
-    // 而"无意漏写"和"有意不放"要能区分开，所以不给默认值。
-    categories: z.array(z.string()).min(1),
-
-    // ---- 选填 ----
-    // updatedDate 不写就不显示（不是每篇文章都会更新）
-    updatedDate: z.coerce.date().optional(),
-    // 标签可以以后再加
-    tags: z.array(z.string()).default([]),
-    // draft: true 的文章不会出现在列表和页面里，方便"写了但先不发"
-    draft: z.boolean().default(false),
-  }),
+  schema: z.preprocess((raw) => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const data = /** @type {Record<string, unknown>} */ (raw);
+    // 只在正式字段缺失时才用别名兜底，避免两边都写时以正式字段为准
+    return {
+      ...data,
+      pubDate: data.pubDate ?? data.date ?? data.created,
+      description: data.description ?? data.explain ?? data.summary,
+    };
+  }, postsSchema),
 });
 
 export const collections = { posts };
