@@ -112,6 +112,50 @@ function splitList(text) {
 
 const KIND_CN = { tags: '标签', categories: '分类' };
 
+// ---------- 白天 / 黑夜 ----------
+
+const THEME_KEY = 'mgr.theme';
+
+function currentTheme() {
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+}
+
+/** 切换主题。persist=false 用于「跟随系统」，此时不写 localStorage */
+function applyTheme(theme, persist = true) {
+  document.documentElement.dataset.theme = theme;
+  const next = theme === 'dark' ? '切换到白天' : '切换到黑夜';
+  const btn = $('btnTheme');
+  btn.title = next;
+  btn.setAttribute('aria-label', next);
+  if (persist) {
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      /* 存不了就算了，本次会话内仍然有效 */
+    }
+  }
+}
+
+function bindTheme() {
+  applyTheme(currentTheme(), false); // 把 title 同步成当前状态，别写 localStorage
+
+  $('btnTheme').addEventListener('click', () => {
+    applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');
+  });
+
+  // 用户从没手动选过的时候跟着系统走；一旦点过按钮就以他的选择为准
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  mq.addEventListener('change', () => {
+    let saved = null;
+    try {
+      saved = localStorage.getItem(THEME_KEY);
+    } catch {
+      /* 忽略 */
+    }
+    if (saved !== 'light' && saved !== 'dark') applyTheme(mq.matches ? 'dark' : 'light', false);
+  });
+}
+
 // ---------- 状态栏 ----------
 
 async function loadStatus() {
@@ -215,7 +259,9 @@ function openDrawer(kind) {
   state.drawer = kind;
   state.selected = null;
   $('drawerTitle').textContent = KIND_CN[kind];
-  $('drawerHint').textContent = `把${KIND_CN[kind]}拖到右边的文章上即可添加；也可以把文章拖进这里`;
+  // 换抽屉就把搜索条件清掉：从「标签」切到「分类」还留着上一个关键词只会让人困惑
+  $('drawerSearch').value = '';
+  $('drawerSearch').placeholder = `搜索${KIND_CN[kind]}`;
   $('drawer').hidden = false;
   $('resizerDrawer').hidden = false;
   // 宽度不用管：applyLayout 里 --drawer-w 取 layout.drawer || layout.side，
@@ -239,10 +285,22 @@ function renderDrawer() {
   const kind = state.drawer;
   if (!kind) return;
   const box = $('drawerList');
-  const list = (state.meta && state.meta[kind]) || [];
+  const all = (state.meta && state.meta[kind]) || [];
+  const raw = $('drawerSearch').value.trim();
+  const q = raw.toLowerCase();
+  const list = q ? all.filter((it) => it.name.toLowerCase().includes(q)) : all;
 
-  if (list.length === 0) {
+  // 没搜的时候讲怎么拖；搜了以后改成报匹配数，否则用户不知道筛掉了多少
+  $('drawerHint').textContent = q
+    ? `匹配 ${list.length} / ${all.length} 个${KIND_CN[kind]}`
+    : `把${KIND_CN[kind]}拖到右边的文章上即可添加；也可以把文章拖进这里`;
+
+  if (all.length === 0) {
     box.innerHTML = `<div class="drawer-empty">还没有${KIND_CN[kind]}</div>`;
+    return;
+  }
+  if (list.length === 0) {
+    box.innerHTML = `<div class="drawer-empty">没有匹配「${esc(raw)}」的${KIND_CN[kind]}</div>`;
     return;
   }
 
@@ -690,10 +748,19 @@ function bind() {
       if (k === 'ingest') return openModal('ingest');
       if (state.drawer === k) return closeDrawer(); // 再点一次收起
       openDrawer(k);
+      $('drawerSearch').focus(); // 打开就是来搜或来拖的，光标直接落在搜索框
     }),
   );
 
   $('drawerClose').addEventListener('click', closeDrawer);
+
+  $('drawerSearch').addEventListener('input', renderDrawer);
+  $('drawerSearch').addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !e.target.value) return;
+    e.stopPropagation(); // 有搜索词时 Esc 先清搜索，别顺手把整个抽屉关了
+    e.target.value = '';
+    renderDrawer();
+  });
   $('btnOpenIngest').addEventListener('click', () => openModal('ingest'));
 
   // 悬浮窗关闭（遮罩、× 按钮、底部按钮都走 data-close）
@@ -789,6 +856,7 @@ function bind() {
   bindResizer($('resizerSide'), 'side');
   bindResizer($('resizerDrawer'), 'drawer');
   bindDrag();
+  bindTheme();
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {

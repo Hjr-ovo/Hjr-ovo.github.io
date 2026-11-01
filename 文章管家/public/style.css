@@ -20,31 +20,45 @@
   --warn: #8a6413;
   --warn-soft: #fdf3dc;
   --ok: #0f6e56;
+  --scroll-thumb: #d3d0c3;
+  --scroll-thumb-hover: #b3b0a2;
   --shadow: 0 1px 2px rgba(44, 44, 42, 0.04), 0 4px 12px rgba(44, 44, 42, 0.04);
   --font-sans: system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei', sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Courier New', monospace;
+  /* ⚠️ 不能只靠 head 里的 <meta name="color-scheme">：那只声明「两种都支持」，
+     原生控件（滚动条、input）会去跟**系统**配色。这里写明 light，
+     深色块再写明 dark，原生控件才会跟着本站主题走。 */
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #e7e5de;
-    --muted: #9c9a92;
-    --line: #2f322c;
-    --bg: #141614;
-    --bg-card: #1e211e;
-    --accent: #6ed3ad;
-    --accent-soft: #1c3a31;
-    --chip-bg: #262a25;
-    --input-bg: #191c19;
-    --danger: #e08b7d;
-    --danger-soft: #3a2320;
-    --warn: #d8b96a;
-    --warn-soft: #332c19;
-    --ok: #6ed3ad;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.28);
-    color-scheme: dark;
-  }
+/* 深色主题只覆盖变量，不改任何具体规则（和站点同一套规矩）。
+ * 由 <html data-theme="dark"> 触发，首屏脚本在样式表之前就把这个属性设好了。 */
+[data-theme='dark'] {
+  --ink: #e7e5de;
+  --muted: #9c9a92;
+  --line: #2f322c;
+  --bg: #141614;
+  --bg-card: #1e211e;
+  --accent: #6ed3ad;
+  --accent-soft: #1c3a31;
+  --chip-bg: #262a25;
+  --input-bg: #191c19;
+  --danger: #e08b7d;
+  --danger-soft: #3a2320;
+  --warn: #d8b96a;
+  --warn-soft: #332c19;
+  --ok: #6ed3ad;
+  --scroll-thumb: #3b3e37;
+  --scroll-thumb-hover: #4f534a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.28);
+  color-scheme: dark;
+}
+
+/* 滚动条：细一点，颜色跟着主题变量。这里没写 ::-webkit-scrollbar 那套，
+ * 所以 scrollbar-width / scrollbar-color 可以直接用（Chrome 121+ 与 Firefox 都支持）。 */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
 }
 
 * {
@@ -213,12 +227,26 @@ body.resizing {
   line-height: 1.5;
 }
 
+.drawer-search {
+  padding: 0 8px 8px;
+}
+
+.drawer-search input[type='search'] {
+  padding: 5px 9px;
+  font-size: 12px;
+  border-radius: 7px;
+}
+
 .drawer-list {
   overflow: auto;
   padding: 0 8px 16px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* 搜索框占掉一块高度后，列表必须自己吃掉剩余空间才滚得动；
+     没有 min-height: 0 时 flex 子项的默认 min-height:auto 会顶破抽屉 */
+  flex: 1;
+  min-height: 0;
 }
 
 .drawer-item {
@@ -344,6 +372,54 @@ body.resizing {
 
 .dot.off {
   background: var(--danger);
+}
+
+/* ---------- 白天 / 黑夜切换 ----------
+ * 圆形图标按钮，和站点右上角那颗是同一个东西。
+ * 浅色下显示月亮（点它进黑夜），深色下显示太阳 —— 全靠 CSS 换图标，
+ * 切换时不动 DOM，图标不会闪。
+ */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  flex: none;
+  color: var(--muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.theme-toggle:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.theme-toggle:focus-visible {
+  outline: none;
+  border-color: var(--line);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.theme-toggle svg {
+  display: block;
+}
+
+.theme-toggle .icon-sun {
+  display: none;
+}
+
+[data-theme='dark'] .theme-toggle .icon-sun {
+  display: block;
+}
+
+[data-theme='dark'] .theme-toggle .icon-moon {
+  display: none;
 }
 
 /* ---------- 按钮 ---------- */
