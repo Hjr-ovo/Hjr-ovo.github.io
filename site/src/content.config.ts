@@ -25,10 +25,10 @@ const postsSchema = z.object({
   description: z.string(),
   pubDate: z.coerce.date(),
   // 分类：一篇文章可以属于多个分类（2026-10-18 从单值 category 改来）。
-  // 至少留一个 —— 没有分类的文章在分类页里会成孤儿。
-  // min(1) 而不是 default([])：空数组等于没分类，必须是作者有意为之，
-  // 而"无意漏写"和"有意不放"要能区分开，所以不给默认值。
-  categories: z.array(z.string()).min(1),
+  // 2026-11-01 起**不再强制至少一个**：分类只是归类手段，不归类的文章
+  // 照样该发，它只是不出现在任何分类页里。改成 default([]) 而不是去掉字段，
+  // 是为了让模板里 `post.data.categories` 永远是个数组，少写空值判断。
+  categories: z.array(z.string()).default([]),
 
   // ---- 选填 ----
   // updatedDate 不写就不显示（不是每篇文章都会更新）

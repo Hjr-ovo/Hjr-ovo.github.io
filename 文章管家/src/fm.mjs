@@ -26,12 +26,8 @@ export const FIELDS = ['title', 'description', 'pubDate', 'updatedDate', 'catego
  * 关键点：正文用字符偏移直接 slice 出来，不做任何切分重拼 ——
  * 这样正文里的空行、行尾、缩进全都原样保留。
  */
-export function splitDocument(raw) {
-  const hasBOM = raw.startsWith(BOM);
-  const text = hasBOM ? raw.slice(1) : raw;
-  const eol = text.includes('\r\n') ? '\r\n' : '\n';
-
-  // 按物理行扫描，记下每行的起止偏移
+/** 按物理行扫描，记下每行的起止偏移 */
+function scanLines(text) {
   const lines = [];
   let start = 0;
   for (let i = 0; i < text.length; i++) {
@@ -44,6 +40,15 @@ export function splitDocument(raw) {
     }
   }
   if (start < text.length) lines.push({ start, end: text.length, content: text.slice(start) });
+  return lines;
+}
+
+export function splitDocument(raw) {
+  const hasBOM = raw.startsWith(BOM);
+  const text = hasBOM ? raw.slice(1) : raw;
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+
+  const lines = scanLines(text);
 
   if (lines.length === 0 || lines[0].content.trim() !== '---') {
     throw new Error('文件开头不是 frontmatter（第一行应该只有三个短横线 ---）');
@@ -70,6 +75,85 @@ export function splitDocument(raw) {
   const bodyRaw = text.slice(closeLine.start + closeLine.content.length);
 
   return { hasBOM, eol, fmLines, bodyRaw, text };
+}
+
+/** 是不是那一行「三个短横线」 */
+const isFence = (s) => s.trim() === '---';
+
+/**
+ * 中间那几行是不是真的 YAML 字段（而不是正文里的一条水平线）。
+ *
+ * 为什么需要判断：Markdown 里 `---` 单独一行是水平线（hr），
+ * Obsidian 笔记完全可能第一行就是一条水平线。只看「第一个 --- 和第二个 ---」
+ * 会把中间那段正文当成元数据吞掉。所以要求块内每一行都长得像字段。
+ */
+function looksLikeFields(lines, from, to) {
+  let keys = 0;
+  for (let i = from; i < to; i++) {
+    const t = lines[i].content.trim();
+    if (t === '' || t.startsWith('#')) continue;
+    if (/^-\s+\S/.test(t)) continue; // 块状数组的子项
+    if (/^[A-Za-z0-9_-]+\s*:(\s|$)/.test(t)) {
+      keys++;
+      continue;
+    }
+    return false; // 有一行不像字段 → 整块不是 frontmatter
+  }
+  return true; // 含「空块」的情况（--- 紧跟 ---）
+}
+
+/**
+ * 宽松切分：**允许文件根本没有 frontmatter**。
+ *
+ * 入库时用户从 Obsidian 拖进来的笔记大多没有元数据块，甚至第一行就是
+ * 一条 `---` 水平线。严格的 splitDocument 遇到这种直接抛错，
+ * 入库第一步就走不下去（2026-11-01 用户反馈）。
+ *
+ * 判定顺序：
+ *   1. 跳过开头空行，第一行不是 `---` → 没有 frontmatter，全文当正文
+ *   2. 有开头 `---` 但往后 200 行内找不到结束线 → 当作没有，记一条提示
+ *   3. 找得到结束线，但中间不像字段（像正文） → 当作没有，记一条提示
+ *
+ * 返回体的 bodyRaw 永远指向「正文的起点」，没有 frontmatter 时就是整份文件。
+ */
+export function splitDocumentLoose(raw) {
+  const hasBOM = raw.startsWith(BOM);
+  const text = hasBOM ? raw.slice(1) : raw;
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = scanLines(text);
+
+  const none = { hasBOM, eol, fmLines: [], bodyRaw: text, text, hasFrontmatter: false, note: '' };
+
+  let first = 0;
+  while (first < lines.length && lines[first].content.trim() === '') first++;
+  if (first >= lines.length || !isFence(lines[first].content)) return none;
+
+  let close = -1;
+  const limit = Math.min(lines.length, first + 200);
+  for (let i = first + 1; i < limit; i++) {
+    if (isFence(lines[i].content)) {
+      close = i;
+      break;
+    }
+  }
+  if (close === -1) {
+    return { ...none, note: '开头有 --- 但找不到结束的那一行，当作没有元数据块，全文当正文' };
+  }
+  if (!looksLikeFields(lines, first + 1, close)) {
+    return { ...none, note: '开头两个 --- 之间不像字段（像是正文里的水平线），当作没有元数据块' };
+  }
+
+  const closeLine = lines[close];
+  return {
+    hasBOM,
+    eol,
+    fmLines: lines.slice(first + 1, close).map((l) => l.content),
+    // 与 splitDocument 同样的规矩：从结束行的**内容末尾**开始，别丢那个换行
+    bodyRaw: text.slice(closeLine.start + closeLine.content.length),
+    text,
+    hasFrontmatter: true,
+    note: '',
+  };
 }
 
 /** 正文内容（去掉紧跟 frontmatter 的空白行，统一换行符，供界面编辑） */
@@ -291,7 +375,8 @@ export function validateMeta(meta) {
     problems.push(`更新日期格式不对：${meta.updatedDate}（要 YYYY-MM-DD）`);
   }
   const cats = (meta.categories || []).map((s) => String(s).trim()).filter(Boolean);
-  if (cats.length === 0) problems.push('至少要有一个分类');
+  // 分类**不是**必填（2026-11-01 用户明确要求）：不归类也是一篇文章，
+  // 它只是不会出现在任何分类页里。这里只拦重复项。
   if (new Set(cats).size !== cats.length) problems.push('分类有重复项');
   return problems;
 }

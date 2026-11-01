@@ -35,6 +35,7 @@
         <button class="nav-item" data-nav="ingest">入库</button>
         <button class="nav-item" data-nav="tags">标签</button>
         <button class="nav-item" data-nav="categories">分类</button>
+        <button class="nav-item" data-nav="trash">回收箱</button>
         <div class="side-foot" id="dirHint">正在读取…</div>
       </aside>
 
@@ -123,8 +124,8 @@
                 <h2>起名与归类</h2>
 
                 <div class="field">
-                  <label for="gSlug">文件名（= URL，只能用英文小写、数字、短横线）</label>
-                  <input type="text" id="gSlug" />
+                  <label for="gSlug">文件名（= URL，自动生成，重复会自动加序号）</label>
+                  <input type="text" id="gSlug" spellcheck="false" />
                   <div class="hint" id="slugPreview">/posts/…/</div>
                   <div class="picker" id="pickSlug"></div>
                 </div>
@@ -132,10 +133,11 @@
                 <div class="field">
                   <label for="gTitle">标题</label>
                   <input type="text" id="gTitle" />
+                  <div class="picker" id="pickTitle"></div>
                 </div>
 
                 <div class="field">
-                  <label for="gDesc">摘要（必填）</label>
+                  <label for="gDesc">摘要（会显示在列表和搜索结果里）</label>
                   <textarea id="gDesc" rows="3"></textarea>
                   <div class="hint" id="descHint"></div>
                 </div>
@@ -146,15 +148,14 @@
                     <input type="date" id="gDate" />
                   </div>
                   <div class="field">
-                    <label for="gCats">分类（至少一个）</label>
-                    <input type="text" id="gCats" />
+                    <label>分类（可空，可多个）</label>
+                    <div class="terms" id="gCats" data-kind="categories" data-placeholder="输入可搜索，回车新建"></div>
                   </div>
                 </div>
 
                 <div class="field">
-                  <label for="gTags">标签（可空，逗号隔开）</label>
-                  <input type="text" id="gTags" />
-                  <div class="picker" id="pickGTags"></div>
+                  <label>标签（可空，可多个）</label>
+                  <div class="terms" id="gTags" data-kind="tags" data-placeholder="输入可搜索，回车新建"></div>
                 </div>
 
                 <div class="field">
@@ -220,15 +221,13 @@
               </div>
 
               <div class="field">
-                <label for="fCats">分类（至少一个，多个用逗号隔开）</label>
-                <input type="text" id="fCats" placeholder="例如：数据结构, 算法" />
-                <div class="picker" id="pickCats"></div>
+                <label>分类（可空，可多个，输入可搜索）</label>
+                <div class="terms" id="fCats" data-kind="categories" data-placeholder="输入可搜索，回车新建"></div>
               </div>
 
               <div class="field">
-                <label for="fTags">标签（可空，多个用逗号隔开）</label>
-                <input type="text" id="fTags" placeholder="例如：哈希表, 冲突处理" />
-                <div class="picker" id="pickTags"></div>
+                <label>标签（可空，可多个，输入可搜索）</label>
+                <div class="terms" id="fTags" data-kind="tags" data-placeholder="输入可搜索，回车新建"></div>
               </div>
 
               <div class="field">

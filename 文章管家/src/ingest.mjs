@@ -2,13 +2,20 @@
 //
 // 这条链路是整套工具唯一「新造」的东西（设计文档 F2）。
 // 核心原则：**诊断只预测，不改文件**；写入时正文逐字节不动。
+//
+// 2026-11-01 按用户反馈改了五处，这条链路才好用：
+//   1. 文件名自动从文章名生成，重名自动加序号（-2 / -3），不用手改
+//   2. 标题直接取文件名
+//   3. 文件开头**可以没有** frontmatter（--- 包起来的元数据块）
+//   4. date / tags / explain 都不是必须的，有就用、没有就给默认
+//   5. 分类可以空着
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { splitDocument, parseFields, bodyOf, pick, today } from './fm.mjs';
+import { splitDocumentLoose, parseFields, bodyOf, pick, today } from './fm.mjs';
 import { slugify } from './slug.mjs';
-import { POSTS_DIR, listPosts, readingStats, slugExists } from './posts.mjs';
+import { POSTS_DIR, listPosts, readingStats, uniqueSlug, writeAtomic } from './posts.mjs';
 
 const KNOWN_FIELDS = new Set([
   'title',
@@ -65,54 +72,112 @@ function headingLevels(body) {
   return out;
 }
 
+/** 去掉行内 Markdown 记号，只要纯文字（摘要自动截取用） */
+function plainText(s) {
+  return String(s)
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/(\*|_)(.*?)\1/g, '$2')
+    .replace(/~~(.*?)~~/g, '$1')
+    .replace(/==(.*?)==/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * 正文第一段（没有摘要时自动拿来当摘要）。
+ * 跳过标题、引用、列表、表格、图片、水平线 —— 那些当摘要没意义。
+ */
+function firstParagraph(body) {
+  const buf = [];
+  for (const line of splitCodeBlocks(body)) {
+    if (line === null) {
+      if (buf.length) break;
+      continue;
+    }
+    const t = line.trim();
+    if (!t) {
+      if (buf.length) break;
+      continue;
+    }
+    if (/^(#{1,6}\s|\||>|[-*+]\s|\d+\.\s|!\[|```|---+\s*$|<)/.test(t)) {
+      if (buf.length) break;
+      continue;
+    }
+    buf.push(t);
+  }
+  return plainText(buf.join(' '));
+}
+
+/** 太长就截断，别把整段搬进列表页 */
+function clip(text, max = 80) {
+  const s = String(text || '');
+  return s.length > max ? s.slice(0, max).trimEnd() + '…' : s;
+}
+
 /**
  * 诊断：只读，不写任何文件。
  *
  * @param {string} raw 文件全文
  * @param {{ filename?: string, existingCategories?: string[] }} ctx
  */
-export function analyze(raw, ctx = {}) {
+export async function analyze(raw, ctx = {}) {
   const checks = [];
   const add = (level, text) => checks.push({ level, text });
 
-  const hasBOM = raw.startsWith('\uFEFF');
-  if (hasBOM) add('info', '文件带 UTF-8 BOM，写入时会去掉（BOM 会让 YAML 解析诡异失败）');
+  if (raw.startsWith('\uFEFF')) add('info', '文件带 UTF-8 BOM，写入时会去掉（BOM 会让 YAML 解析诡异失败）');
 
-  let doc;
-  try {
-    doc = splitDocument(raw);
-  } catch (err) {
-    add('error', `无法解析：${err.message}`);
-    return { checks, meta: null, body: '', slugCandidates: [], unknownFields: [] };
-  }
-
+  // 宽松切分：没有 frontmatter 也能继续，全文当正文
+  const doc = splitDocumentLoose(raw);
   const data = parseFields(doc.fmLines);
   const body = bodyOf(doc);
   const stats = readingStats(body);
   const headings = headingLevels(body);
 
-  // D1 标题
-  let title = String(data.title ?? '').trim();
-  if (title) {
-    add('info', `标题来自 frontmatter 的 title：「${title}」`);
+  if (doc.hasFrontmatter) {
+    const n = doc.fmLines.filter((l) => l.trim() !== '').length;
+    add('info', `读到了 frontmatter（${n} 行元数据），写入时会按站点规范重排`);
   } else {
-    const h1 = headings.find((h) => h.level === 1);
-    title = h1 ? h1.text : '';
-    add(h1 ? 'warn' : 'error', h1 ? `没写 title，将取正文第一个 h1：「${title}」` : '既没有 title，正文里也没有 h1 —— 请手填');
+    add('info', doc.note || '文件开头没有 frontmatter —— 全文当正文，元数据入库时自动生成');
   }
 
-  // D2 必填
-  const desc = String(data.description ?? data.explain ?? data.summary ?? '').trim();
-  if (!desc) add('warn', '缺少 description / explain（摘要）—— 入库时必须手填，否则构建失败，列表页也会是空的');
+  // ---- 标题：按用户要求**直接取文件名** ----
+  const fileBase = ctx.filename ? String(ctx.filename).replace(/\.(md|markdown)$/i, '').trim() : '';
+  const fmTitle = String(data.title ?? '').trim();
+  const h1 = headings.find((h) => h.level === 1);
+  const title = fileBase || fmTitle || (h1 ? h1.text : '');
 
+  if (title) {
+    add('info', fileBase ? `标题取自文件名：「${title}」` : fmTitle ? `没有文件名可用，标题取自 frontmatter：「${title}」` : `标题取自正文第一个 h1：「${title}」`);
+  } else {
+    add('error', '既没有文件名也没有 title —— 标题得手填');
+  }
+
+  // frontmatter 里有别的标题时，只提示、不擅自采用（用户要的是文件名）
+  if (fmTitle && fileBase && fmTitle !== fileBase) {
+    add('info', `frontmatter 里还写着一个标题「${fmTitle}」，要换成它点右边的候选`);
+  }
+
+  // ---- 摘要：没有就截正文第一段 ----
+  const descFromFile = String(data.description ?? data.explain ?? data.summary ?? '').trim();
+  const firstPara = firstParagraph(body);
+  const description = descFromFile || clip(firstPara);
+  if (descFromFile) add('info', '摘要来自 frontmatter 的 ' + (data.description ? 'description' : data.explain ? 'explain' : 'summary'));
+  else if (description) add('info', `没有摘要，自动截取正文第一段：「${clip(description, 30)}」。不满意可以直接改`);
+  else add('warn', '没有摘要，正文第一段也取不到 —— 请手写一句（会显示在列表和搜索结果里）');
+
+  // ---- 日期：没有就用今天 ----
   const dateRaw = pick(data, 'pubDate');
-  if (!dateRaw) add('info', `没有发布日期，将用今天：${today()}`);
+  if (dateRaw) add('info', `发布日期来自 frontmatter：${String(dateRaw).slice(0, 10)}`);
+  else add('info', `没有发布日期，用今天：${today()}`);
 
-  // D4 h1 数量
+  // ---- h1 与标题层级 ----
   const h1Count = headings.filter((h) => h.level === 1).length;
   if (h1Count > 0) add('info', `正文有 ${h1Count} 个 h1，构建时会整体降一级（remark-obsidian 插件接管）`);
 
-  // D5 跳级
   for (let i = 1; i < headings.length; i++) {
     const prev = headings[i - 1];
     const cur = headings[i];
@@ -126,7 +191,7 @@ export function analyze(raw, ctx = {}) {
     }
   }
 
-  // D6 / D7 == 高亮
+  // ---- == 高亮 ----
   const plain = splitCodeBlocks(body);
   let pairs = 0;
   let strayLine = 0;
@@ -140,7 +205,7 @@ export function analyze(raw, ctx = {}) {
   if (pairs > 0) add('info', `${pairs} 处 ==高亮== 会转成 <mark>；代码块内的 == 不会被碰`);
   if (strayLine) add('warn', `正文第 ${strayLine + 1} 行有落单的 ==（不成对），会原样露出来`);
 
-  // D8 图片
+  // ---- 图片 ----
   const images = [...body.matchAll(/!\[[^\]]*\]\(([^)\s]+)/g)].map((m) => m[1]);
   const localImg = images.filter((u) => !/^(https?:)?\/\//i.test(u) && !u.startsWith('data:'));
   if (images.length > 0) {
@@ -151,46 +216,54 @@ export function analyze(raw, ctx = {}) {
     }
   }
 
-  // D9 体量
+  // ---- 体量 ----
   add('info', `${stats.chars} 字 · ${stats.codeLines} 行代码 · 预计阅读 ${stats.minutes} 分钟`);
 
-  // D11 多余字段
+  // ---- 多余字段 ----
   const unknown = Object.keys(data).filter((k) => !KNOWN_FIELDS.has(k));
   if (unknown.length > 0) add('info', `有 ${unknown.length} 个站点用不到的字段（${unknown.join('、')}），会被忽略但保留在文件里`);
 
-  // D12 分类
+  // ---- 分类：可空 ----
   const rawCats = data.categories ?? data.category;
-  const cats = Array.isArray(rawCats) ? rawCats : rawCats ? [rawCats] : [];
+  const cats = (Array.isArray(rawCats) ? rawCats : rawCats ? [rawCats] : []).map(String).filter(Boolean);
   const existing = new Set(ctx.existingCategories || []);
-  const fresh = cats.filter((c) => !existing.has(String(c)));
+  const fresh = cats.filter((c) => !existing.has(c));
   if (cats.length === 0) {
-    add('warn', '没有分类 —— 入库时必须至少选一个，否则文章在分类页里是孤儿');
+    add('info', '没有分类 —— 分类是可选的，空着就不出现在任何分类页，以后随时能加');
   } else if (fresh.length > 0) {
     add('info', `分类「${fresh.join('、')}」是新的，会新建对应的分类页`);
   }
 
-  // 起名候选
-  const slugCandidates = [];
-  const fromFM = String(data.slug ?? '').trim();
-  if (fromFM) slugCandidates.push(fromFM);
-  const auto = slugify(title);
-  if (auto && !slugCandidates.includes(auto)) slugCandidates.push(auto);
-  if (ctx.filename) {
-    const base = String(ctx.filename).replace(/\.md$/i, '').replace(/[^\x20-\x7e]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
-    if (base && !slugCandidates.includes(base)) slugCandidates.push(base);
-  }
-  slugCandidates.push(`topic-${today()}`);
+  // ---- 文件名：自动生成 + 重名自动加序号 ----
+  const seed = slugify(fileBase || title);
+  const slug = await uniqueSlug(seed);
+  if (slug !== seed) add('warn', `站里已经有「${seed}」了，文件名自动改成「${slug}」（想换可以手改）`);
+  if (!fileBase && !title) add('error', '没有可用的名字，文件名只能手填');
+
+  // 其他可选名字：frontmatter 的 slug、另一个标题、按日期兜底
+  const altSlugs = [];
+  const fmSlug = String(data.slug ?? '').trim();
+  if (fmSlug) altSlugs.push(fmSlug);
+  if (fmTitle && fmTitle !== title) altSlugs.push(slugify(fmTitle));
+  altSlugs.push(`post-${today()}`);
+  const slugCandidates = [...new Set(altSlugs)].filter((s) => s && s !== slug);
+
+  // 标题候选（给「用 frontmatter 标题」留一个按钮）
+  const altTitles = [];
+  if (fmTitle && fmTitle !== title) altTitles.push({ label: '用 frontmatter 的标题', value: fmTitle });
+  if (h1 && h1.text && h1.text !== title && h1.text !== fmTitle) altTitles.push({ label: '用正文 h1', value: h1.text });
 
   const hasError = checks.some((c) => c.level === 'error');
 
   return {
     checks,
     hasError,
+    hasFrontmatter: doc.hasFrontmatter,
     meta: {
       title,
-      description: desc,
+      description,
       pubDate: String(dateRaw || today()).slice(0, 10),
-      categories: cats.map(String),
+      categories: cats,
       tags: (Array.isArray(data.tags) ? data.tags : data.tags ? [data.tags] : []).map(String),
       draft: data.draft === true,
     },
@@ -201,32 +274,41 @@ export function analyze(raw, ctx = {}) {
     unknownValues: Object.fromEntries(unknown.map((k) => [k, data[k]])),
     stats,
     h1Count,
-    slugCandidates: [...new Set(slugCandidates)].filter(Boolean).slice(0, 4),
+    descFromFile: Boolean(descFromFile),
+    slug,
+    slugSeed: seed,
+    slugCandidates: slugCandidates.slice(0, 4),
+    altTitles,
   };
 }
 
 /**
  * 写入：frontmatter 按规范重排，正文逐字节保留。
+ *
+ * 文件名重复不再报错 —— 自动加序号，这是用户要的「自动处理」。
  */
 export async function writePost({ raw, slug, meta }) {
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-    if (/^[^a-z0-9]/.test(slug) || /[A-Z]/.test(slug)) {
+  let wanted = String(slug || '').trim();
+
+  if (!wanted) wanted = slugify(meta?.title || '');
+  if (!wanted) throw Object.assign(new Error('文件名不能为空'), { code: 'BAD_SLUG' });
+
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(wanted)) {
+    if (/^[^a-z0-9]/.test(wanted) || /[A-Z]/.test(wanted)) {
       throw Object.assign(new Error('文件名只能用「小写字母、数字、短横线」，且不能以短横线开头'), { code: 'BAD_SLUG' });
     }
     throw Object.assign(new Error('文件名不合法：只能用「小写字母、数字、短横线」'), { code: 'BAD_SLUG' });
   }
-  if (await slugExists(slug)) {
-    throw Object.assign(new Error(`已经有一篇叫 ${slug}.md 的文章了，换个名字`), { code: 'EXISTS' });
-  }
 
-  const doc = splitDocument(raw);
+  const finalSlug = await uniqueSlug(wanted);
+
+  const doc = splitDocumentLoose(raw);
   const data = parseFields(doc.fmLines);
 
   const problems = [];
   if (!String(meta.title || '').trim()) problems.push('标题不能为空');
   if (!String(meta.description || '').trim()) problems.push('摘要不能为空');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(meta.pubDate || ''))) problems.push('日期格式要 YYYY-MM-DD');
-  if (!Array.isArray(meta.categories) || meta.categories.filter(Boolean).length === 0) problems.push('至少要有一个分类');
   if (problems.length) throw Object.assign(new Error(problems.join('；')), { code: 'INVALID' });
 
   const q = (v) => {
@@ -242,7 +324,8 @@ export async function writePost({ raw, slug, meta }) {
     `pubDate: ${meta.pubDate}`,
   ];
   if (meta.updatedDate) lines.push(`updatedDate: ${meta.updatedDate}`);
-  lines.push(`categories: ${arr(meta.categories)}`);
+  // 分类允许为空数组：站点 schema 也从 min(1) 放宽到 default([])
+  lines.push(`categories: ${arr(meta.categories || [])}`);
   lines.push(`tags: ${arr(meta.tags || [])}`);
   lines.push(`draft: ${meta.draft === true ? 'true' : 'false'}`);
 
@@ -256,12 +339,11 @@ export async function writePost({ raw, slug, meta }) {
   }
 
   const text = `---\n${lines.join('\n')}\n---\n\n${bodyOf(doc).replace(/\r\n/g, '\n')}\n`;
-  const full = path.join(POSTS_DIR, `${slug}.md`);
-  const tmp = `${full}.tmp`;
-  await fs.writeFile(tmp, text.replace(/\n/g, doc.eol), 'utf8');
-  await fs.rename(tmp, full);
+  const full = path.join(POSTS_DIR, `${finalSlug}.md`);
+  await fs.mkdir(POSTS_DIR, { recursive: true });
+  await writeAtomic(full, text.replace(/\n/g, doc.eol));
 
-  return { slug, url: `/posts/${slug}/`, chars: readingStats(bodyOf(doc)).chars };
+  return { slug: finalSlug, url: `/posts/${finalSlug}/`, chars: readingStats(bodyOf(doc)).chars, renamed: finalSlug !== wanted };
 }
 
 /** 现有分类名（入库时给下拉候选） */

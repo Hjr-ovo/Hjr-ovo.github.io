@@ -6,6 +6,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { parseDocument, patchMeta, replaceBody, validateMeta, today } from './fm.mjs';
@@ -15,6 +16,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, '../..');
 export const SITE_DIR = path.join(ROOT, 'site');
 export const POSTS_DIR = path.join(SITE_DIR, 'src', 'content', 'posts');
+// 回收箱放在**站点之外**（文章管家目录下）。
+// 这样 Astro 的内容集合根本扫不到它，删掉的文章在网站上自然消失，
+// 也不会进 PageFind 索引 —— 不需要在构建时再写任何排除逻辑。
+export const TRASH_DIR = path.resolve(__dirname, '../回收箱');
 
 // ---------- 统计（对齐 site/src/utils/reading-time.ts） ----------
 
@@ -64,6 +69,27 @@ function safeSlug(slug) {
 
 function fileOf(slug) {
   return path.join(POSTS_DIR, `${safeSlug(slug)}.md`);
+}
+
+/**
+ * 原子写：先写 .tmp 再 rename。
+ *
+ * ⚠️ Windows 上 rename 偶尔会报 EPERM —— 站点 dev 的 watcher 正好在读这个文件时
+ * 就会锁住一瞬间（2026-11-01 实测踩到）。所以失败后重试几次，
+ * 而不是直接把 EPERM 抛给用户看。
+ */
+export async function writeAtomic(file, text) {
+  const tmp = `${file}.tmp`;
+  await fs.writeFile(tmp, text, 'utf8');
+  for (let i = 0; i < 5; i++) {
+    try {
+      await fs.rename(tmp, file);
+      return;
+    } catch (err) {
+      if (i === 4) throw err;
+      await new Promise((r) => setTimeout(r, 60 * (i + 1)));
+    }
+  }
 }
 
 // ---------- 读 ----------
@@ -189,9 +215,7 @@ export async function savePost(slug, payload) {
   }
 
   // 3) 原子写：先写 .tmp 再 rename，中途失败不留半截文件
-  const tmp = `${full}.tmp`;
-  await fs.writeFile(tmp, finalText, 'utf8');
-  await fs.rename(tmp, full);
+  await writeAtomic(full, finalText);
 
   return {
     saved: true,
@@ -236,19 +260,13 @@ export async function updateTerms(slug, kind, name, action) {
   } else {
     next = list.filter((x) => x !== term);
     if (next.length === list.length) return { changed: false, kind: key, terms: list, slug };
-    // 分类是必填项（validateMeta 也会拦，这里提前给一句人话）
-    if (key === 'categories' && next.length === 0) {
-      throw Object.assign(new Error('至少要留一个分类，不能把最后一个删掉'), { code: 'INVALID' });
-    }
+    // 分类现在允许清空（2026-11-01）：一篇文章可以不属于任何分类。
   }
 
   const { content, changedKeys } = patchMeta(current.raw, { [key]: next });
   if (changedKeys.length === 0) return { changed: false, kind: key, terms: next, slug };
 
-  const full = fileOf(slug);
-  const tmp = `${full}.tmp`;
-  await fs.writeFile(tmp, content, 'utf8');
-  await fs.rename(tmp, full);
+  await writeAtomic(fileOf(slug), content);
 
   return { changed: true, kind: key, terms: next, slug };
 }
@@ -269,14 +287,179 @@ export async function taxonomy() {
   return { categories: toArr(catMap), tags: toArr(tagMap), today: today() };
 }
 
-/** 文件名是否已被占用（入库时用） */
+/** 文件名是否被占用（站内 + 回收箱，都用同一个名字会互相顶） */
 export async function slugExists(slug) {
-  try {
-    await fs.access(fileOf(slug));
-    return true;
-  } catch {
-    return false;
+  for (const dir of [POSTS_DIR, TRASH_DIR]) {
+    try {
+      await fs.access(path.join(dir, `${slug}.md`));
+      return true;
+    } catch {
+      /* 这个目录里没有，继续看下一个 */
+    }
   }
+  return false;
+}
+
+/**
+ * 给一个想用的文件名找一个**没被占用**的版本。
+ *
+ * 用户要求：文件名自动从文章名来，出现两篇一样的要「自动处理」——
+ * 所以这里不报错，直接加序号：`two-sum` → `two-sum-2` → `two-sum-3`。
+ * 回收箱里的名字也算占用，否则恢复时会撞车。
+ */
+export async function uniqueSlug(base) {
+  const clean = String(base || '').trim() || 'post';
+  if (!(await slugExists(clean))) return clean;
+  for (let n = 2; n < 1000; n++) {
+    const cand = `${clean}-${n}`;
+    if (!(await slugExists(cand))) return cand;
+  }
+  throw Object.assign(new Error(`「${clean}」这个名字的变体用完了，换个名字`), { code: 'EXISTS' });
+}
+
+// ---------- 回收箱 ----------
+//
+// 两级删除（2026-11-01 用户要求）：
+//   第一次删 → 文件移到 文章管家/回收箱/，站上立刻消失，可以恢复
+//   回收箱里再删 → 交给 Windows 回收站（不是不可逆的 rm）
+// 「恢复」时如果站里已经有同名文章，自动加序号，不覆盖。
+
+async function ensureTrash() {
+  await fs.mkdir(TRASH_DIR, { recursive: true });
+}
+
+/** 把一篇文章移进回收箱 */
+export async function moveToTrash(slug) {
+  const from = fileOf(slug);
+  try {
+    await fs.access(from);
+  } catch {
+    throw Object.assign(new Error(`找不到文章：${slug}`), { code: 'NOT_FOUND' });
+  }
+  await ensureTrash();
+  const to = path.join(TRASH_DIR, `${slug}.md`);
+
+  // 回收箱里同名（理论上不会，因为 slugExists 也查回收箱）—— 保险起见换名
+  let target = to;
+  if (await exists(target)) target = path.join(TRASH_DIR, `${await uniqueSlug(slug)}.md`);
+
+  await fs.rename(from, target);
+  return { slug, trashedAs: path.basename(target, '.md') };
+}
+
+/** 回收箱列表（按删除时间倒序；删除时间就用文件 mtime） */
+export async function listTrash() {
+  let names = [];
+  try {
+    names = await fs.readdir(TRASH_DIR);
+  } catch {
+    return { items: [] }; // 目录还不存在 = 空的
+  }
+
+  const items = [];
+  for (const name of names.filter((n) => n.endsWith('.md'))) {
+    const slug = name.slice(0, -3);
+    const full = path.join(TRASH_DIR, name);
+    const stat = await fs.stat(full);
+    const raw = await fs.readFile(full, 'utf8');
+    const item = { slug, deletedAt: stat.mtime.toISOString(), size: stat.size, title: slug, pubDate: '', categories: [], tags: [] };
+    try {
+      const { data, body } = parseDocument(raw);
+      item.title = String(data.title ?? '').trim() || slug;
+      item.pubDate = asDateString(data.pubDate ?? data.date ?? data.created);
+      item.categories = Array.isArray(data.categories) ? data.categories.map(String) : data.categories ? [String(data.categories)] : [];
+      item.tags = Array.isArray(data.tags) ? data.tags.map(String) : data.tags ? [String(data.tags)] : [];
+      item.chars = readingStats(body).chars;
+    } catch {
+      item.broken = true;
+    }
+    items.push(item);
+  }
+
+  items.sort((a, b) => (a.deletedAt < b.deletedAt ? 1 : -1));
+  return { items };
+}
+
+/** 在「站内」找一个没被占用的名字（恢复时用 —— 它自己还在回收箱里，不能算占用） */
+async function freeNameInPosts(base) {
+  if (!(await exists(path.join(POSTS_DIR, `${base}.md`)))) return base;
+  for (let n = 2; n < 1000; n++) {
+    const cand = `${base}-${n}`;
+    if (!(await exists(path.join(POSTS_DIR, `${cand}.md`)))) return cand;
+  }
+  throw Object.assign(new Error(`「${base}」的名字用完了，换个名字再恢复`), { code: 'EXISTS' });
+}
+
+/** 从回收箱恢复。站里已有同名就自动加序号，绝不覆盖现有文章。 */
+export async function restoreTrash(slug) {
+  const from = path.join(TRASH_DIR, `${slug}.md`);
+  try {
+    await fs.access(from);
+  } catch {
+    throw Object.assign(new Error(`回收箱里没有：${slug}`), { code: 'NOT_FOUND' });
+  }
+  await fs.mkdir(POSTS_DIR, { recursive: true });
+  // ⚠️ 这里必须只看站内：用 uniqueSlug 的话，它自己还在回收箱里，
+  // 会被自己挡住，恢复一次就多一层 -2（2026-11-01 实测踩到）。
+  const finalSlug = await freeNameInPosts(slug);
+  await fs.rename(from, path.join(POSTS_DIR, `${finalSlug}.md`));
+  return { slug: finalSlug, renamed: finalSlug !== slug };
+}
+
+/**
+ * 彻底删除：交给 Windows 回收站，不是 `rm`。
+ *
+ * 为什么绕 PowerShell：Node 没有内置的「丢进回收站」API，
+ * 手写 SHFileOperation 要编译原生模块。Microsoft.VisualBasic 的
+ * DeleteFile(..., SendToRecycleBin) 是系统自带、零依赖的做法。
+ * 失败就**什么都不做**（宁可删不掉，也不能把文件永久删了）。
+ */
+export async function purgeTrash(slug) {
+  const full = path.join(TRASH_DIR, `${slug}.md`);
+  try {
+    await fs.access(full);
+  } catch {
+    throw Object.assign(new Error(`回收箱里没有：${slug}`), { code: 'NOT_FOUND' });
+  }
+  await sendToRecycleBin(full);
+  return { slug, purged: true };
+}
+
+function exists(p) {
+  return fs.access(p).then(
+    () => true,
+    () => false,
+  );
+}
+
+function sendToRecycleBin(filePath) {
+  if (process.platform !== 'win32') {
+    // 非 Windows 没有回收站概念，退化为直接删（这个工具本来也只在 Windows 上用）
+    return fs.unlink(filePath);
+  }
+  const quoted = filePath.replace(/'/g, "''");
+  const script =
+    'Add-Type -AssemblyName Microsoft.VisualBasic; ' +
+    `[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile('${quoted}','OnlyErrorDialogs','SendToRecycleBin')`;
+
+  // ⚠️ 必须用 -EncodedCommand（UTF-16LE 的 base64）而不是 -Command。
+  // 直接传 -Command 时，脚本里的中文路径会按控制台代码页(GBK)解释，
+  // PowerShell 收到一串乱码路径 → FileNotFoundException（2026-11-01 实测）。
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+
+  return new Promise((resolve, reject) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], { windowsHide: true }, (err, _stdout, stderr) => {
+      if (err) {
+        reject(
+          Object.assign(new Error(`交给系统回收站失败，文件还留在回收箱里：${String(stderr || err.message).trim()}`), {
+            code: 'RECYCLE_FAILED',
+          }),
+        );
+        return;
+      }
+      resolve();
+    });
+  });
 }
 
 export { POSTS_DIR as postsDir };

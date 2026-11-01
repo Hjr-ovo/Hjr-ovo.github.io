@@ -146,6 +146,28 @@ const WORD_MAP = {
   抛出: 'throw',
   垃圾回收: 'garbage-collection',
 
+  // 算法题（2026-11-01 补：题解类标题里这些词出现频率极高）
+  两数之和: 'two-sum',
+  三数之和: 'three-sum',
+  题解: 'solution',
+  题目: 'problem',
+  双指针: 'two-pointers',
+  二分查找: 'binary-search',
+  二分: 'binary-search',
+  滑动窗口: 'sliding-window',
+  最长: 'longest',
+  最短: 'shortest',
+  子串: 'substring',
+  子数组: 'subarray',
+  回文: 'palindrome',
+  合并: 'merge',
+  矩阵: 'matrix',
+  反转: 'reverse',
+  括号: 'parentheses',
+  排列: 'permutation',
+  组合: 'combination',
+  背包: 'knapsack',
+
   // 数据结构术语
   树: 'tree',
   二叉树: 'binary-tree',
@@ -315,8 +337,10 @@ export function slugify(title) {
   let slug = finalWords.join('-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 
   // ---- 4. 兜底 ----
-  // 全中文标题、词表一个都没命中 → 结果可能是空的
-  if (slug === '') {
+  // 全中文标题、词表一个都没命中 → 结果可能是空的。
+  // 另外「只剩数字」也算失败：`1-两数之和.md` 翻出来是 `1`，
+  // 这种名字放进 URL 里等于没说，还不如按日期来（2026-11-01 踩到）。
+  if (slug === '' || /^[0-9-]+$/.test(slug)) {
     slug = 'post-' + todayStamp();
   }
 

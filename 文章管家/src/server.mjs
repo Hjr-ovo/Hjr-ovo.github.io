@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exec } from 'node:child_process';
 
-import { listPosts, readPost, savePost, updateTerms, taxonomy } from './posts.mjs';
+import { listPosts, readPost, savePost, updateTerms, taxonomy, moveToTrash, listTrash, restoreTrash, purgeTrash } from './posts.mjs';
 import { analyze, writePost, existingCategories } from './ingest.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -138,11 +138,52 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // 删除第一步：文章 → 回收箱（站上立刻消失，可恢复）
+  if (parts[0] === 'api' && parts[1] === 'posts' && parts[3] === 'trash' && parts.length === 4) {
+    if (req.method !== 'POST') return json(res, 405, { error: '不支持的方法' });
+    const slug = decodeURIComponent(parts[2]);
+    try {
+      return json(res, 200, await moveToTrash(slug));
+    } catch (err) {
+      const status = err.code === 'NOT_FOUND' ? 404 : 500;
+      return json(res, status, { error: err.message, code: err.code });
+    }
+  }
+
+  // 回收箱列表
+  if (req.method === 'GET' && url.pathname === '/api/trash') {
+    return json(res, 200, await listTrash());
+  }
+
+  // 回收箱：恢复 / 彻底删除
+  if (parts[0] === 'api' && parts[1] === 'trash' && parts.length >= 3) {
+    const slug = decodeURIComponent(parts[2]);
+
+    if (parts[3] === 'restore' && parts.length === 4) {
+      if (req.method !== 'POST') return json(res, 405, { error: '不支持的方法' });
+      try {
+        return json(res, 200, await restoreTrash(slug));
+      } catch (err) {
+        return json(res, err.code === 'NOT_FOUND' ? 404 : 500, { error: err.message, code: err.code });
+      }
+    }
+
+    if (parts.length === 3) {
+      if (req.method !== 'DELETE') return json(res, 405, { error: '不支持的方法' });
+      try {
+        return json(res, 200, await purgeTrash(slug));
+      } catch (err) {
+        const status = err.code === 'NOT_FOUND' ? 404 : 500;
+        return json(res, status, { error: err.message, code: err.code });
+      }
+    }
+  }
+
   // 入库：先诊断
   if (req.method === 'POST' && url.pathname === '/api/analyze') {
     const body = await readBody(req);
     if (typeof body.raw !== 'string') return json(res, 400, { error: '缺少文件内容' });
-    const result = analyze(body.raw, {
+    const result = await analyze(body.raw, {
       filename: body.filename,
       existingCategories: await existingCategories(),
     });

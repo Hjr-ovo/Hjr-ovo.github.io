@@ -11,12 +11,13 @@ const $ = (id) => document.getElementById(id);
 
 const state = {
   posts: [],
+  trash: [],
   meta: null, // 分类 / 标签候选
   current: null, // 正在编辑的那篇（含 hash，用于冲突检测）
   dirty: false,
   plan: null, // 入库诊断结果
   raw: '', // 入库文件原文
-  drawer: null, // null | 'tags' | 'categories'
+  drawer: null, // null | 'tags' | 'categories' | 'trash'
   selected: null, // { kind, name } 抽屉里点中的那一项
   drag: null, // { type:'term'|'post', ... } 当前正在拖的东西
 };
@@ -103,14 +104,204 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-function splitList(text) {
-  return String(text || '')
-    .split(/[,，、]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+const KIND_CN = { tags: '标签', categories: '分类' };
+
+// ---------- 分类 / 标签输入框（chips + 下拉候选 + 新建提示） ----------
+//
+// 用户要求（2026-11-01）：有下拉可选，也能按输入匹配；
+// 输入的东西不存在时要明确告诉用户「正在新建」。
+//
+// 所以这里的候选菜单最后一行永远是 `＋ 新建分类「xxx」`（输入框有内容时），
+// 已经加进去、但磁盘上还不存在的项，chip 会带虚线圈和提示 ——
+// 保存后才真的建出来，界面上要先说清楚。
+
+const TERMS = {};
+
+function mountTerms(el) {
+  const kind = el.dataset.kind; // 'tags' | 'categories'
+  const cn = KIND_CN[kind];
+
+  el.innerHTML =
+    '<div class="terms-box"><span class="terms-chips"></span>' +
+    `<input class="terms-input" type="text" autocomplete="off" spellcheck="false" placeholder="${esc(el.dataset.placeholder || '')}" />` +
+    '</div><div class="terms-menu" hidden></div>';
+
+  const box = el.querySelector('.terms-box');
+  const chipsEl = el.querySelector('.terms-chips');
+  const input = el.querySelector('.terms-input');
+  const menu = el.querySelector('.terms-menu');
+
+  let values = [];
+  let options = []; // [{ name, count }]
+  let rows = []; // 菜单当前渲染的项
+  let active = -1;
+  const listeners = [];
+
+  const isNew = (name) => !options.some((o) => o.name === name);
+
+  function renderChips() {
+    chipsEl.innerHTML = values
+      .map((v) => {
+        const fresh = isNew(v);
+        return (
+          `<span class="chip${fresh ? ' is-new' : ''}"${fresh ? ` title="新建${cn}「${esc(v)}」——保存后才会真正建出来"` : ''}>` +
+          `${esc(v)}<button type="button" data-remove="${esc(v)}" title="移除">×</button></span>`
+        );
+      })
+      .join('');
+  }
+
+  function closeMenu() {
+    menu.hidden = true;
+    active = -1;
+    rows = [];
+  }
+
+  function renderMenu() {
+    if (rows.length === 0) return closeMenu();
+    menu.innerHTML = rows
+      .map((r, i) => {
+        const cls = 'terms-row' + (r.type === 'new' ? ' is-new' : '') + (i === active ? ' active' : '');
+        if (r.type === 'new') return `<div class="${cls}" data-idx="${i}"><span class="plus">＋</span>新建${cn}「${esc(r.name)}」</div>`;
+        return `<div class="${cls}" data-idx="${i}"><span class="nm">${esc(r.name)}</span><span class="cnt">${r.count}</span></div>`;
+      })
+      .join('');
+    menu.hidden = false;
+  }
+
+  function openMenu() {
+    const q = input.value.trim().toLowerCase();
+    const chosen = new Set(values);
+    const hits = options.filter((o) => !chosen.has(o.name) && (!q || o.name.toLowerCase().includes(q)));
+    rows = hits.map((o) => ({ type: 'pick', name: o.name, count: o.count }));
+
+    const typed = input.value.trim();
+    if (typed && !chosen.has(typed) && !options.some((o) => o.name === typed)) {
+      // 「新建」放**最后**：打字时多半是在找已有的那个（输「双」是想找「双指针」），
+      // 把它顶到第一行会让人习惯性回车就误建一个新标签。
+      rows.push({ type: 'new', name: typed });
+    }
+
+    active = rows.length > 0 ? 0 : -1;
+    renderMenu();
+  }
+
+  function commit(name) {
+    const v = String(name ?? '').trim();
+    input.value = '';
+    if (!v) return closeMenu();
+    if (!values.includes(v)) {
+      values.push(v);
+      renderChips();
+      listeners.forEach((fn) => fn());
+    }
+    closeMenu();
+    if (document.activeElement === input) openMenu();
+  }
+
+  input.addEventListener('focus', openMenu);
+  input.addEventListener('input', () => {
+    // 逗号 = 上一个词说完了（中英文逗号、顿号都认），直接落成 chip
+    if (/[,，、]/.test(input.value)) {
+      const parts = input.value.split(/[,，、]/);
+      const tail = parts.pop();
+      parts.forEach((p) => {
+        const v = p.trim();
+        if (v && !values.includes(v)) values.push(v);
+      });
+      input.value = tail;
+      renderChips();
+      listeners.forEach((fn) => fn());
+    }
+    openMenu();
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (menu.hidden) return openMenu();
+      e.preventDefault();
+      active = (active + (e.key === 'ArrowDown' ? 1 : rows.length - 1)) % rows.length;
+      renderMenu();
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!menu.hidden && active >= 0 && rows[active]) commit(rows[active].name);
+      else commit(input.value);
+      return;
+    }
+    if (e.key === 'Escape') {
+      if (!menu.hidden) {
+        e.stopPropagation(); // 有菜单时 Esc 先关菜单，别顺手把整个悬浮窗关了
+        closeMenu();
+        return;
+      }
+      if (input.value) {
+        e.stopPropagation();
+        input.value = '';
+      }
+      return;
+    }
+    if (e.key === 'Backspace' && input.value === '' && values.length > 0) {
+      values.pop();
+      renderChips();
+      listeners.forEach((fn) => fn());
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    // 输入完直接点别处：把没确认的文字也收下，别让用户白打一遍
+    if (input.value.trim()) commit(input.value);
+    else closeMenu();
+  });
+
+  // 用 mousedown 而不是 click：click 之前 blur 已经把菜单关了
+  menu.addEventListener('mousedown', (e) => {
+    const row = e.target.closest('.terms-row');
+    if (!row) return;
+    e.preventDefault();
+    commit(rows[Number(row.dataset.idx)]?.name);
+    input.focus();
+  });
+
+  chipsEl.addEventListener('mousedown', (e) => {
+    const btn = e.target.closest('[data-remove]');
+    if (!btn) return;
+    e.preventDefault();
+    values = values.filter((v) => v !== btn.dataset.remove);
+    renderChips();
+    listeners.forEach((fn) => fn());
+    input.focus();
+  });
+
+  const api = {
+    get: () => values.slice(),
+    set(list) {
+      values = (Array.isArray(list) ? list : list ? [list] : []).map(String).map((s) => s.trim()).filter(Boolean);
+      renderChips();
+    },
+    setOptions(list) {
+      options = (list || []).map((o) => (typeof o === 'string' ? { name: o, count: 0 } : o));
+      renderChips(); // 「新建」标记要跟着候选名单重算
+      if (!menu.hidden) openMenu();
+    },
+    onChange(fn) {
+      listeners.push(fn);
+    },
+    focus: () => input.focus(),
+  };
+
+  TERMS[el.id] = api;
+  renderChips();
+  return api;
 }
 
-const KIND_CN = { tags: '标签', categories: '分类' };
+/** 把最新的分类 / 标签候选喂给所有输入框 */
+function syncTermOptions() {
+  if (!state.meta) return;
+  for (const id of ['gCats', 'fCats']) TERMS[id]?.setOptions(state.meta.categories || []);
+  for (const id of ['gTags', 'fTags']) TERMS[id]?.setOptions(state.meta.tags || []);
+}
 
 // ---------- 白天 / 黑夜 ----------
 
@@ -219,6 +410,7 @@ function cardHtml(p) {
         <span class="card-actions">
           <button class="btn" data-edit="${esc(p.slug)}">编辑</button>
           <button class="btn" data-open="${esc(p.slug)}">打开</button>
+          <button class="btn danger" data-del="${esc(p.slug)}" title="移入回收箱">删除</button>
         </span>
       </div>
     </article>`;
@@ -258,10 +450,10 @@ function renderList() {
 function openDrawer(kind) {
   state.drawer = kind;
   state.selected = null;
-  $('drawerTitle').textContent = KIND_CN[kind];
+  $('drawerTitle').textContent = kind === 'trash' ? '回收箱' : KIND_CN[kind];
   // 换抽屉就把搜索条件清掉：从「标签」切到「分类」还留着上一个关键词只会让人困惑
   $('drawerSearch').value = '';
-  $('drawerSearch').placeholder = `搜索${KIND_CN[kind]}`;
+  $('drawerSearch').placeholder = kind === 'trash' ? '搜索回收箱' : `搜索${KIND_CN[kind]}`;
   $('drawer').hidden = false;
   $('resizerDrawer').hidden = false;
   // 宽度不用管：applyLayout 里 --drawer-w 取 layout.drawer || layout.side，
@@ -269,6 +461,7 @@ function openDrawer(kind) {
   // 否则用户之后拖宽左栏，抽屉会僵在旧宽度上不跟。
   renderDrawer();
   syncNav();
+  if (kind === 'trash') loadTrash();
 }
 
 function closeDrawer() {
@@ -284,6 +477,8 @@ function closeDrawer() {
 function renderDrawer() {
   const kind = state.drawer;
   if (!kind) return;
+  if (kind === 'trash') return renderTrash();
+
   const box = $('drawerList');
   const all = (state.meta && state.meta[kind]) || [];
   const raw = $('drawerSearch').value.trim();
@@ -312,6 +507,110 @@ function renderDrawer() {
       </div>`;
     })
     .join('');
+}
+
+// ---------- 回收箱 ----------
+//
+// 删除分两级（2026-11-01 用户要求）：
+//   卡片上「删除」→ 文件移到 文章管家/回收箱/，博客上立刻消失，可以恢复
+//   回收箱里再删 → 交给 Windows 回收站
+// 回收箱在 site/ 之外，所以 Astro 根本扫不到，也用不着在构建时排除。
+
+async function loadTrash() {
+  try {
+    const data = await api('/api/trash');
+    state.trash = data.items || [];
+  } catch {
+    state.trash = [];
+  }
+  if (state.drawer === 'trash') renderTrash();
+}
+
+function shortDateTime(iso) {
+  // ISO → 11-01 14:30（只取月日时，年份对回收箱没意义）
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function renderTrash() {
+  const box = $('drawerList');
+  const all = state.trash;
+  const raw = $('drawerSearch').value.trim();
+  const q = raw.toLowerCase();
+  const list = q ? all.filter((t) => `${t.title} ${t.slug}`.toLowerCase().includes(q)) : all;
+
+  $('drawerHint').textContent = q
+    ? `匹配 ${list.length} / ${all.length} 篇回收箱里的文章`
+    : '这里的文章在博客上已经看不到。恢复就点「恢复」，彻底删除会丢进电脑的回收站';
+
+  if (all.length === 0) {
+    box.innerHTML = '<div class="drawer-empty">回收箱是空的</div>';
+    return;
+  }
+  if (list.length === 0) {
+    box.innerHTML = `<div class="drawer-empty">没有匹配「${esc(raw)}」的文章</div>`;
+    return;
+  }
+
+  box.innerHTML = list
+    .map(
+      (t) => `<div class="trash-row">
+        <div class="trash-title" title="${esc(t.slug)}.md">${esc(t.title)}</div>
+        <div class="trash-meta">${esc(t.pubDate || '无日期')} · 删于 ${esc(shortDateTime(t.deletedAt))}</div>
+        <div class="trash-btns">
+          <button class="btn tiny" data-restore="${esc(t.slug)}">恢复</button>
+          <button class="btn tiny danger" data-purge="${esc(t.slug)}">彻底删除</button>
+        </div>
+      </div>`,
+    )
+    .join('');
+}
+
+async function trashPost(slug) {
+  const post = state.posts.find((p) => p.slug === slug);
+  const name = post ? post.title : slug;
+  const ok = confirm(
+    `把《${name}》移进回收箱？\n\n· 博客上会立刻看不到它\n· 文件还在「回收箱」里，随时可以恢复\n· 想彻底删掉，要在回收箱里再删一次`,
+  );
+  if (!ok) return;
+
+  try {
+    const res = await api(`/api/posts/${encodeURIComponent(slug)}/trash`, { method: 'POST' });
+    if (state.current && state.current.slug === slug) closeModal('edit');
+    toast(`已移入回收箱：${res.trashedAs}.md`);
+    await Promise.all([loadPosts(), refreshMeta(), loadTrash()]);
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function restorePost(slug) {
+  try {
+    const res = await api(`/api/trash/${encodeURIComponent(slug)}/restore`, { method: 'POST' });
+    toast(res.renamed ? `已恢复，站里已有同名，改名为 ${res.slug}.md` : `已恢复 ${res.slug}.md`);
+    await Promise.all([loadPosts(), refreshMeta(), loadTrash()]);
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function purgePost(slug) {
+  const item = state.trash.find((t) => t.slug === slug);
+  const name = item ? item.title : slug;
+  const ok = confirm(
+    `彻底删除《${name}》？\n\n文件会被放进**电脑的回收站**（不是永久删除），要彻底清掉得自己去清空系统回收站。\n\n在文章管家里，这一步之后就没法撤销了。`,
+  );
+  if (!ok) return;
+
+  try {
+    await api(`/api/trash/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+    toast('已放进电脑回收站');
+    await loadTrash();
+  } catch (err) {
+    toast(err.message, true);
+  }
 }
 
 function syncNav() {
@@ -493,14 +792,14 @@ async function openEdit(slug) {
     $('fDesc').value = d.description ?? d.explain ?? '';
     $('fDate').value = String(d.pubDate ?? d.date ?? d.created ?? '').slice(0, 10);
     $('fUpdated').value = String(d.updatedDate ?? '').slice(0, 10);
-    $('fCats').value = (Array.isArray(d.categories) ? d.categories : d.categories ? [d.categories] : []).join(', ');
-    $('fTags').value = (Array.isArray(d.tags) ? d.tags : d.tags ? [d.tags] : []).join(', ');
+    TERMS.fCats.set(Array.isArray(d.categories) ? d.categories : d.categories ? [d.categories] : []);
+    TERMS.fTags.set(Array.isArray(d.tags) ? d.tags : d.tags ? [d.tags] : []);
     $('fDraft').checked = d.draft === true;
     $('fBody').value = post.body;
 
     $('editSlug').textContent = `${slug}.md`;
     setSaveState('没有改动');
-    renderPickers();
+    syncTermOptions();
     openModal('edit');
   } catch (err) {
     toast(err.message, true);
@@ -518,16 +817,6 @@ function markDirty() {
   setSaveState('有未保存的改动（Ctrl+S 保存）', true);
 }
 
-function renderPickers() {
-  if (!state.meta) return;
-  $('pickCats').innerHTML = (state.meta.categories || [])
-    .map((c) => `<span class="chip click" data-add="fCats" data-val="${esc(c.name)}">＋ ${esc(c.name)}</span>`)
-    .join('');
-  $('pickTags').innerHTML = (state.meta.tags || [])
-    .map((t) => `<span class="chip click" data-add="fTags" data-val="${esc(t.name)}">＋ ${esc(t.name)}</span>`)
-    .join('');
-}
-
 async function save(force = false) {
   if (!state.current) return;
   const meta = {
@@ -535,8 +824,8 @@ async function save(force = false) {
     description: $('fDesc').value,
     pubDate: $('fDate').value,
     updatedDate: $('fUpdated').value || undefined,
-    categories: splitList($('fCats').value),
-    tags: splitList($('fTags').value),
+    categories: TERMS.fCats.get(),
+    tags: TERMS.fTags.get(),
     draft: $('fDraft').checked,
   };
 
@@ -584,7 +873,7 @@ async function save(force = false) {
 async function refreshMeta() {
   try {
     state.meta = await api('/api/taxonomy');
-    renderPickers();
+    syncTermOptions();
     if (state.drawer) renderDrawer();
   } catch {
     /* 分类候选拿不到不影响主流程 */
@@ -625,37 +914,33 @@ async function handleFile(file) {
     }
     $('btnIngest').disabled = false;
 
-    $('gSlug').value = plan.slugCandidates[0] || '';
+    // 文件名和标题都是自动的，用户不用改；重复了服务端会自动加 -2
+    $('gSlug').value = plan.slug || plan.slugCandidates[0] || '';
     $('gTitle').value = plan.meta.title || '';
     $('gDesc').value = plan.meta.description || '';
     $('gDate').value = plan.meta.pubDate || '';
-    $('gCats').value = plan.meta.categories.join(', ');
-    $('gTags').value = plan.meta.tags.join(', ');
+    TERMS.gCats.set(plan.meta.categories);
+    TERMS.gTags.set(plan.meta.tags);
     $('gDraft').checked = plan.meta.draft === true;
 
     $('pickSlug').innerHTML = plan.slugCandidates
-      .slice(1)
       .map((s) => `<span class="chip click" data-slug="${esc(s)}">${esc(s)}</span>`)
       .join('');
 
-    $('descHint').textContent = plan.meta.description
+    $('pickTitle').innerHTML = (plan.altTitles || [])
+      .map((t) => `<span class="chip click" data-title="${esc(t.value)}">${esc(t.label)}</span>`)
+      .join('');
+
+    $('descHint').textContent = plan.descFromFile
       ? '来自原文，可以改'
-      : '原文件没写摘要 —— 请用一句话说清这篇讲什么（会出现在列表和搜索结果里）';
+      : '原文没写摘要 —— 自动截取了正文第一段，可以直接改';
 
     await refreshMeta();
-    renderGTags();
     updateSlugPreview();
     $('bodyPreview').textContent = plan.body.split('\n').slice(0, 40).join('\n');
   } catch (err) {
     toast(err.message, true);
   }
-}
-
-function renderGTags() {
-  if (!state.meta) return;
-  $('pickGTags').innerHTML = (state.meta.tags || [])
-    .map((t) => `<span class="chip click" data-add="gTags" data-val="${esc(t.name)}">＋ ${esc(t.name)}</span>`)
-    .join('');
 }
 
 function updateSlugPreview() {
@@ -673,11 +958,11 @@ async function doIngest() {
     title: $('gTitle').value,
     description: $('gDesc').value,
     pubDate: $('gDate').value,
-    categories: splitList($('gCats').value),
-    tags: splitList($('gTags').value),
+    categories: TERMS.gCats.get(), // 可以为空
+    tags: TERMS.gTags.get(),
   };
   if (!meta.description.trim()) {
-    toast('摘要不能空着', true);
+    toast('摘要不能空着（会显示在列表和搜索结果里）', true);
     $('gDesc').focus();
     return;
   }
@@ -689,7 +974,7 @@ async function doIngest() {
       body: JSON.stringify({ raw: state.raw, slug, meta }),
     });
 
-    toast('已写入，源文件请留在 Obsidian，以后改站点这一份');
+    toast(res.renamed ? `已写入 ${res.slug}.md（原名重复，自动加了序号）` : '已写入，源文件请留在 Obsidian，以后改站点这一份');
     resetIngest();
     closeModal('ingest');
     await Promise.all([refreshMeta(), loadPosts()]);
@@ -779,21 +1064,23 @@ function bind() {
     const open = e.target.closest('[data-open]');
     if (open) return openInSite(open.dataset.open);
 
-    const add = e.target.closest('[data-add]');
-    if (add) {
-      const input = $(add.dataset.add);
-      const cur = splitList(input.value);
-      const v = add.dataset.val;
-      if (!cur.includes(v)) cur.push(v);
-      input.value = cur.join(', ');
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    }
+    const del = e.target.closest('[data-del]');
+    if (del) return trashPost(del.dataset.del);
+
+    const restore = e.target.closest('[data-restore]');
+    if (restore) return restorePost(restore.dataset.restore);
+
+    const purge = e.target.closest('[data-purge]');
+    if (purge) return purgePost(purge.dataset.purge);
 
     const slugPick = e.target.closest('[data-slug]');
     if (slugPick) {
       $('gSlug').value = slugPick.dataset.slug;
       updateSlugPreview();
     }
+
+    const titlePick = e.target.closest('[data-title]');
+    if (titlePick) $('gTitle').value = titlePick.dataset.title;
   });
 
   // 工具栏
@@ -813,9 +1100,11 @@ function bind() {
   });
   $('btnOpenPost').addEventListener('click', () => state.current && openInSite(state.current.slug, true));
 
-  for (const id of ['fTitle', 'fDesc', 'fDate', 'fUpdated', 'fCats', 'fTags']) {
+  for (const id of ['fTitle', 'fDesc', 'fDate', 'fUpdated']) {
     $(id).addEventListener('input', markDirty);
   }
+  TERMS.fCats.onChange(markDirty);
+  TERMS.fTags.onChange(markDirty);
   $('fDraft').addEventListener('change', markDirty);
   $('fBody').addEventListener('input', markDirty);
 
@@ -882,10 +1171,13 @@ function bind() {
 
 (async function init() {
   applyLayout();
+  // 分类 / 标签输入框要先建好，bind() 里会给它们挂「有改动」的回调
+  for (const id of ['gCats', 'gTags', 'fCats', 'fTags']) mountTerms($(id));
   bind();
   await refreshMeta();
   await loadStatus();
   await loadPosts();
+  await loadTrash();
 
   // 直接用地址进来：/#/edit/<文件名> 、/#/ingest 、/#/tags 、/#/categories
   const hash = decodeURIComponent(location.hash || '');
@@ -893,7 +1185,7 @@ function bind() {
     await openEdit(hash.slice('#/edit/'.length));
   } else if (hash === '#/ingest') {
     openModal('ingest');
-  } else if (hash === '#/tags' || hash === '#/categories') {
+  } else if (hash === '#/tags' || hash === '#/categories' || hash === '#/trash') {
     openDrawer(hash.slice(2));
   }
 
