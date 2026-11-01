@@ -35,33 +35,16 @@ const stats = [
       </div>
     </header>
 
-    <section class="about-section">
-      <h2>我在写什么</h2>
-      {ABOUT.intro.map((text) => <p>{text}</p>)}
-
-      <ul class="about-stats">
-        {stats.map((stat) => (
-          <li>
-            <span class="stat-num">{stat.num}</span>
-            <span class="stat-label">{stat.label}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-
-    <section class="about-section">
-      <h2>最近在折腾</h2>
-      <ul class="about-list">
-        {ABOUT.doing.map((text) => <li>{text}</li>)}
-      </ul>
-    </section>
-
-    <section class="about-section">
-      <h2>常用</h2>
-      <div class="tag-row">
-        {ABOUT.tools.map((tool) => <span class="tag muted">{tool}</span>)}
-      </div>
-    </section>
+    {/* 三个数字放最前面：读者想知道的「这个站在不在更新、内容够不够多」，
+        一眼就能看到；本节其它文字（2026-11-01 起）都已经删掉。 */}
+    <ul class="about-stats">
+      {stats.map((stat) => (
+        <li>
+          <span class="stat-num">{stat.num}</span>
+          <span class="stat-label">{stat.label}</span>
+        </li>
+      ))}
+    </ul>
 
     <section class="about-section">
       <h2>关于本站</h2>

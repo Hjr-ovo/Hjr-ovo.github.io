@@ -12,6 +12,8 @@
 :root {
   --ink: #2c2c2a;
   --muted: #6b6a65;
+  /* 比 --muted 再淡一档，只给日期这种「有就行、不该抢眼」的附属信息用 */
+  --faint: #a3a19a;
   --line: #e2e0d8;
   --bg: #fdfcf9;
   --bg-card: #ffffff;
@@ -54,6 +56,7 @@
 [data-theme='dark'] {
   --ink: #e7e5de;
   --muted: #9c9a92;
+  --faint: #6e6c65;
   --line: #2f322c;
   --bg: #171917;
   --bg-card: #1e211e;
@@ -415,6 +418,19 @@ a {
 /* 悬停时标题也一起变绿 —— 鼠标在哪张卡上，标题就给哪张卡回应 */
 .post-item:hover h2 a {
   color: var(--accent);
+}
+
+/* 日期这一行（首页卡片和文章页页头共用）。
+ * 之前这条根本没写规则，于是它按默认 <p> 渲染：16px、正文色 —— 和正文一样重，
+ * 在卡片里比摘要还显眼。日期是「决定读不读之后才关心」的信息，压一档：
+ * 字号收到 0.82rem，颜色改用 --faint（比 --muted 再淡一级）。
+ * tabular-nums 让数字等宽，列表纵向扫视时日期列不会一跳一跳。 */
+.post-meta {
+  margin: 0.5rem 0 0.65rem;
+  font-size: 0.82rem;
+  color: var(--faint);
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 摘要保持次一级：浅色、稍小，跟标题拉开层次 */
