@@ -167,6 +167,13 @@ function mountTerms(el) {
       })
       .join('');
     menu.hidden = false;
+
+    // 弹窗的 .modal-body 是 overflow:auto，菜单朝下展开会被裁掉一截。
+    // 下面放不下、上面放得下时，翻到输入框上方。
+    menu.classList.remove('up');
+    const rect = el.getBoundingClientRect();
+    const h = menu.scrollHeight || 208;
+    if (window.innerHeight - rect.bottom < h + 16 && rect.top > h + 16) menu.classList.add('up');
   }
 
   function openMenu() {

@@ -861,6 +861,12 @@ textarea.body {
   padding: 4px;
 }
 
+/* 下面放不下时翻到上面（悬浮窗 body 是 overflow:auto，朝下会被裁） */
+.terms-menu.up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
 .terms-row {
   display: flex;
   align-items: center;
