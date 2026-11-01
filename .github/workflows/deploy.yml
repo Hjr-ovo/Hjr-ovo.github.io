@@ -1,0 +1,65 @@
+# 推送到 main 就自动构建并发布到 GitHub Pages
+#
+# 仓库根目录里不只放站点：site/ 才是 Astro 项目，所以每条命令都要指定工作目录。
+# 站点地址是 https://hjr-ovo.github.io/（仓库名恰好是 <用户名>.github.io，
+# 属于「用户站」，直接占根域名，链接不需要带任何前缀）。
+
+name: 构建并部署到 GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # 手动触发：Actions 页面右上角 Run workflow，或本机 `gh workflow run`
+  workflow_dispatch:
+
+# 发布 Pages 必须显式给这三个权限，少一个 deploy 步骤就会 403
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时刻只跑一次部署；正在发布时又推了新提交，就排队等它跑完
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 准备 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          # package-lock.json 在 site/ 下，不指路的话缓存会找错地方
+          cache-dependency-path: site/package-lock.json
+
+      - name: 安装依赖
+        working-directory: site
+        run: npm ci
+
+      # npm run build = astro build && pagefind --site dist
+      # 站内搜索的索引就是这条命令顺带生成的，别拆开只跑 astro build
+      - name: 构建站点
+        working-directory: site
+        run: npm run build
+
+      - name: 上传产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 发布
+        id: deployment
+        uses: actions/deploy-pages@v4

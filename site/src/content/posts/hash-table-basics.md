@@ -1,10 +1,10 @@
 ---
-title: 哈希算法与哈希表：冲突、扩容和 O(1) 是怎么来的
-description: 从 key 到桶下标的完整链路：哈希冲突的两种处理方式、装载因子与扩容、为什么平均是 O(1) 而最坏退化成 O(n)，以及哈希表哈希与密码学哈希的本质区别。
+title: 哈希算法
+description: 简单介绍了在数据结构中的哈希算法。
 pubDate: 2026-10-31
 updatedDate: 2026-10-31
 categories: [数据结构]
-tags: [哈希算法, 哈希表, 算法基础]
+tags: [哈希算法]
 draft: false
 ---
 

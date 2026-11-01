@@ -25,6 +25,11 @@ import { loadRedirects } from './src/utils/redirects.mjs';
 
 // https://astro.build/config
 export default defineConfig({
+  // 上线地址。GitHub Pages 的「用户站」占根域名（仓库名 = <用户名>.github.io），
+  // 所以这里不带子路径，站点里那些写死的 /posts/、/about/ 链接才不用加前缀。
+  // 现在还没用到它，但以后加 sitemap / canonical / RSS 都要靠它拼绝对地址，先定好省得忘。
+  site: 'https://hjr-ovo.github.io',
+
   // 文章改名留下的旧地址，构建时自动生成跳转页。
   // 表为空时这里是 {}，Astro 不生成任何跳转页，无副作用。
   //

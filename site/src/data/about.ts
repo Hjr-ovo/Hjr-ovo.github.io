@@ -36,6 +36,7 @@ export const ABOUT = {
   links: [
     { label: 'GitHub', href: 'https://github.com/Hjr-ovo' },
     { label: SITE.email, href: `mailto:${SITE.email}` },
+    { label: SITE.emailAlt, href: `mailto:${SITE.emailAlt}` },
   ],
 } as const;
 

@@ -13,4 +13,7 @@ export const SITE = {
   avatar: '/avatar.png',
   // 公开联系邮箱。刻意选不含姓名拼音的那个地址
   email: 'hjr.ovo@gmail.com',
+  // 第二个联系邮箱。2026-11-01 用户明确说这个地址公开无所谓，加进关于页联系栏
+  // ⚠️ 别和上面那个混：上面是「对外」常用的，这个是备用的
+  emailAlt: 'huangjunran-ovo@163.com',
 } as const;
