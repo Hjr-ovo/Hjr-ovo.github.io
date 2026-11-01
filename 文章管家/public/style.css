@@ -936,15 +936,17 @@ textarea.body {
 
 .trash-btns {
   display: flex;
+  flex-wrap: wrap; /* 抽屉能拖到 140px，一行塞不下两个按钮时各自占一行 */
   gap: 6px;
   margin-top: 7px;
 }
 
 .trash-btns .btn {
-  flex: 1;
+  flex: 1 1 62px;
+  min-width: 0; /* 不加会被 white-space: nowrap 的文字撑开，溢出抽屉 */
   text-align: center;
-  padding: 2px 6px;
-  font-size: 11px;
+  padding: 3px 6px;
+  font-size: 11.5px;
 }
 
 /* 保存条 */
@@ -1165,8 +1167,14 @@ textarea.body {
 
 .btn.tiny {
   padding: 1px 8px;
-  font-size: 16px;
   line-height: 1.4;
+}
+
+/* 「×」单独放大：tiny 原本就为它设的 16px，但那会带到回收箱的
+ * 「恢复 / 彻底删除」上 —— 抽屉拖到 140px 时两个按钮直接被撑破。
+ * 放大只给这一个按钮，别放回 .btn.tiny 通用规则。 */
+.drawer-head .btn.tiny {
+  font-size: 16px;
 }
 
 /* ---------- 空态 / 提示 ---------- */
