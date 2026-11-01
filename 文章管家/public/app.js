@@ -213,8 +213,8 @@ function cardHtml(p) {
       </div>
       ${p.description ? `<p class="card-desc">${esc(p.description)}</p>` : ''}
       <div class="card-meta">
-        <span>${esc(p.pubDate || '无日期')}</span>
-        <span>· ${p.chars} 字</span>
+        <span class="card-date">${esc(p.pubDate || '无日期')}</span>
+        <span class="card-count">· ${p.chars} 字</span>
         ${cats}${head}${more}
         <span class="card-actions">
           <button class="btn" data-edit="${esc(p.slug)}">编辑</button>

@@ -8,6 +8,8 @@
 :root {
   --ink: #2c2c2a;
   --muted: #6b6a65;
+  /* 比 muted 更淡一档，只给日期这类「有就行、不该抢眼」的附属信息 */
+  --faint: #a3a19a;
   --line: #e2e0d8;
   --bg: #f7f6f1;
   --bg-card: #ffffff;
@@ -36,6 +38,7 @@
 [data-theme='dark'] {
   --ink: #e7e5de;
   --muted: #9c9a92;
+  --faint: #6e6c65;
   --line: #2f322c;
   --bg: #141614;
   --bg-card: #1e211e;
@@ -607,6 +610,15 @@ select:focus {
 .card-meta .chip {
   font-size: 11px;
   padding: 0 7px;
+}
+
+/* 日期只是「有就行」的附属信息：比同类信息再淡一档、小一档，
+ * 让视线先落在标题和分类上。tabular-nums 让同排卡片日期等宽对齐。 */
+.card-date {
+  font-size: 10.5px;
+  color: var(--faint);
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 .card-actions {
