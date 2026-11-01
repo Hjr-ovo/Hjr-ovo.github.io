@@ -1,15 +1,15 @@
 ---
-title: LeetCode 1. 两数之和：穷举、哈希表、双指针
-description: LeetCode 第 1 题，用穷举、哈希表、排序双指针三种思路做，哈希解法逐行注释。
+title: 1-两数之和
+description: 这篇文章为leetcode第1题两数之和的解答。
 pubDate: 2026-11-01
-categories: [数据结构]
-tags: [哈希算法, 双指针, 数组]
+categories: [leetcode解答]
+tags: [算法, leetcode]
 draft: false
 ---
 
 # 题目：
 
-给定一个整数数组 `nums` 和一个整数目标值 `target`，请你在该数组中找出 **和为目标值** `target` 的那 **两个** 整数，并返回它们的数组下标。
+给定一个整数数组 `nums` 和一个整数目标值 `target`，请你在该数组中找出 **和为目标值 ** `target`  的那 **两个** 整数，并返回它们的数组下标。
 
 你可以假设每种输入只会对应一个答案，并且你不能使用两次相同的元素。
 
@@ -44,7 +44,7 @@ draft: false
 * `-10<sup>9</sup> <= target <= 10<sup>9</sup>`
 * **只会存在一个有效答案**
 
-**进阶：** 你可以想出一个时间复杂度小于 `O(n<sup>2</sup>)` 的算法吗？
+ **进阶：** 你可以想出一个时间复杂度小于 `O(n<sup>2</sup>)` 的算法吗？
 
 ---
 
@@ -54,18 +54,18 @@ draft: false
 
 代码如下：
 
-```cpp
+```c++
 for(int i=0;i<nums.size();i++)
-{
-    for(int j=i+1;j<nums.size();j++)
-    {
-        if(nums[i]+nums[j]==target)
         {
-            return {i,j};
+            for(int j=i+1;j<nums.size();j++)
+            {
+                if(nums[i]+nums[j]==target)
+                {
+                    return {i,j};
+                }
+            }
         }
-    }
-}
-return {};
+        return {};
 ```
 
 将任意两数之和一个一个算出来，直到出现目标值
@@ -76,22 +76,22 @@ return {};
 
 代码如下：
 
-```cpp
-unordered_map<int, int> hashtable;
-for (int i = 0; i < nums.size(); ++i) {
-    auto it = hashtable.find(target - nums[i]);
-    if (it != hashtable.end()) {
-        return {it->second, i};
-    }
-    hashtable[nums[i]] = i;
-}
-return {};
+```c++
+            unordered_map<int, int> hashtable;
+        for (int i = 0; i < nums.size(); ++i) {
+            auto it = hashtable.find(target - nums[i]);
+            if (it != hashtable.end()) {
+                return {it->second, i};
+            }
+            hashtable[nums[i]] = i;
+        }
+        return {};
 ```
 
 
 代码解析：
 
-```cpp
+```c++
 unordered_map<int, int> hashtable;
 //用unordered_map函数创建一个哈希表，命名为hashtable，前一个int放入key（键），后一个int放入value（值）。
 //在这段代码里：key（键）放的是数组里的数值nums[i]，value（值）放的是这个数值对应的下标i。
@@ -125,11 +125,11 @@ return {};
 
 ---
 
-# 解法三：排序 + 双指针
+## 解法三：排序 + 双指针
 
 代码如下：
 
-```cpp
+```c++
 int n = nums.size();
 vector<pair<int, int>> a(n);
 for (int i = 0; i < n; ++i) a[i] = {nums[i], i};
