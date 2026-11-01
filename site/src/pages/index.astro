@@ -29,7 +29,9 @@ const restCount = posts.length - recentPosts.length;
 ---
 
 <BaseLayout>
-  <p class="intro">{SITE.description}</p>
+  {/* 首页抬头那句话。用的是 SITE.tagline 而不是 SITE.description ——
+      后者留给搜索引擎，口号当 meta description 没信息量 */}
+  <p class="intro">{SITE.tagline}</p>
 
   {posts.length === 0 ? (
     <div class="empty">
