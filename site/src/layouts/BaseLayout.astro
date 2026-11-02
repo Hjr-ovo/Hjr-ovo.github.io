@@ -39,6 +39,14 @@ const pageTitle = title ? `${title} - ${SITE.title}` : SITE.title;
 
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
+    {/* 订阅源声明。浏览器和阅读器靠这一行自动发现 RSS，
+        不加的话用户得手动翻地址栏才知道本站有 RSS（地址见 src/pages/rss.xml.ts）。 */}
+    <link
+      rel="alternate"
+      type="application/rss+xml"
+      title={SITE.title}
+      href="/rss.xml"
+    />
     {/* 告诉浏览器本站两种配色都支持：原生控件（滚动条、日期选择器等）会跟着变 */}
     <meta name="color-scheme" content="light dark" />
 
