@@ -765,7 +765,7 @@ blockquote p:last-child { margin-bottom: 0; }
  * ⚠️ 别在 .callout 里写死颜色 —— 深色下会留一块浅斑（同全站约定）。
  */
 .callout {
-  --tone: #3f7bc4; /* 兜底：note 蓝 */
+  --tone: #4a6f62; /* 兜底：中性信息类的墨绿灰（与 callout-note 同色） */
   margin: 1.4em 0;
   padding: 0.85em 1.05em;
   border: 1px solid color-mix(in srgb, var(--tone) 20%, transparent);
@@ -800,11 +800,17 @@ blockquote p:last-child { margin-bottom: 0; }
 
 /* —— 各类型配色 ——
  * 取的是低饱和版本：站点整体是米白 + 墨绿，饱和度高的原色会在页面上跳出来。
- * 想加新类型：这里加一行 --tone，再在 remark 插件的 CALLOUT_ALIAS 里登记即可。 */
-.callout-note { --tone: #3f7bc4; }
-.callout-abstract { --tone: #2f8fa8; }
-.callout-info { --tone: #3f7bc4; }
-.callout-todo { --tone: #4a72c0; }
+ * 想加新类型：这里加一行 --tone，再在 remark 插件的 CALLOUT_ALIAS 里登记即可。
+ *
+ * 2026-11-02：note / info / todo / abstract 一类原来是蓝色（#3f7bc4 等），
+ * 在米白 + 墨绿的页面上像贴了一块外来物，用户要求换成契合主题的颜色。
+ * 现在这四个「中性信息类」统一用低饱和墨绿灰 #4a6f62 ——
+ * 和强调色 #0f6e56 同一色相，但压暗压灰，做底色时不会比正文还抢眼。
+ * ⚠️ 别退回成蓝色：正文里 Note 用得最多，蓝是整页最扎眼的那块。 */
+.callout-note { --tone: #4a6f62; }
+.callout-abstract { --tone: #4a6f62; }
+.callout-info { --tone: #4a6f62; }
+.callout-todo { --tone: #4a6f62; }
 .callout-tip { --tone: #2a9d8f; }
 .callout-success { --tone: #3f9e5f; }
 .callout-question { --tone: #b08323; }
@@ -1255,11 +1261,20 @@ article img {
   background: var(--bg-card);
   border: 1px solid var(--line);
   border-radius: 10px;
+  box-shadow: var(--shadow-card);
+  /* 过渡写在常态上（不是 hover 里），鼠标移出时才回得去 */
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
   text-decoration: none;
 }
 
+/* 悬停：描边变绿 + 抬起 2px + 换重投影，与首页文章卡片 `.post-item:hover` 同一套动作 */
 .cat-card:hover {
   border-color: var(--accent);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
 }
 
 .cat-name {
