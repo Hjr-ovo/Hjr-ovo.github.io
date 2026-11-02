@@ -1337,16 +1337,24 @@ article img {
   transition:
     color 0.15s ease,
     border-color 0.15s ease,
-    background-color 0.15s ease;
+    background-color 0.15s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
 }
 
+/* 悬停：变色 + 抬起 2px + 加投影，和首页文章卡片同一套动作
+   （见 .post-item:hover）。位移是 2px 而不是更大：
+   这是页头的小控件，抬太高会显得在跳。 */
 .back-link:hover {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
 }
 
-/* 键盘 Tab 过来时也要看得见：只描边变色在浅底上不够醒目，补一圈 outline */
+/* 键盘 Tab 过来时也要看得见：只描边变色在浅底上不够醒目，补一圈 outline。
+   不给它加位移 —— 键盘聚焦时元素乱动会让人找不到焦点。 */
 .back-link:focus-visible {
   border-color: var(--accent);
   color: var(--accent);
@@ -1449,7 +1457,24 @@ article img {
   display: flex;
   align-items: baseline;
   gap: 0.75rem;
-  padding: 0.45rem 0;
+  /* 左右 0.55rem 内边距 + 等量负外边距：给悬停底色留出呼吸空间，
+     而文字的相对位置一点不变（下面 .timeline-items 的缩进不用动）。
+     只往右伸 0.55rem，页面容器 .wrap 有 1.25rem 内边距，不会顶出屏幕。 */
+  padding: 0.45rem 0.55rem;
+  margin: 0 -0.55rem;
+  border-radius: 8px;
+  transition:
+    background-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+/* 悬停：整行（月日 + 标题 + 胶囊）一起抬起。位移只给 1px ——
+   行与行挨得近，抬 2px 会让上下两行看起来在打架。 */
+.archive-item:hover {
+  background: var(--bg-card);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
 }
 
 .archive-date {
