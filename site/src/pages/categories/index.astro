@@ -34,12 +34,18 @@ const categories = [...groups.entries()]
     ),
   }))
   .sort((a, b) => b.count - a.count || b.latest.valueOf() - a.latest.valueOf());
+
+// 顶部「共 X 个分类、Y 篇文章」里的 Y，只算**真的归了分类**的文章。
+// 分类是可以没有的（2026-11-01 起 categories 允许为空），拿全部文章去数就会出现
+// 「2 个分类、3 篇文章」这种对不上的账。
+// 也不能把各分类的 count 相加：一篇文章挂两个分类时，在两个分类下各计一次，相加会重复。
+const categorizedCount = posts.filter((post) => post.data.categories.length > 0).length;
 ---
 
 <BaseLayout title="分类">
   <h1>分类</h1>
   <p class="page-desc">
-    共 {categories.length} 个分类、{posts.length} 篇文章。
+    共 {categories.length} 个分类、{categorizedCount} 篇文章。
   </p>
 
   <div class="cat-grid">

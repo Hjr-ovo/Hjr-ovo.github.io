@@ -1315,16 +1315,43 @@ article img {
 
 /* ---------- 返回链接 ---------- */
 
+/* 返回上级 / 返回列表的按钮（2026-11-02 改版：原来是灰色小字，几乎看不见）
+ * 用在四处：/posts/「← 返回首页」、/categories/<x>「← 所有分类」、
+ *          /tags/<x>「← 所有标签」、文章页「← 返回文章列表」。
+ * 描边胶囊，和首页底部「查看更多历史文章」(.more-link) 同一套按钮语言，
+ * 但**边框用 --line-strong 而不是 --line**：--line 在深色下几乎和卡片底同色，
+ * 一眼看不出是按钮，那就白改了。悬停才用强调色描边 + 浅绿底。
+ * 用 inline-block 而不是 inline-flex：文案里本来就带着「← 」和一个空格，
+ * flex + gap 会变成两个间距。 */
 .back-link {
   display: inline-block;
-  font-size: 0.88rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.2rem;
+  padding: 0.34rem 0.9rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--ink);
+  font-size: 0.85rem;
+  line-height: 1.6;
   text-decoration: none;
-  color: var(--muted);
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .back-link:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* 键盘 Tab 过来时也要看得见：只描边变色在浅底上不够醒目，补一圈 outline */
+.back-link:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ---------- 首页底部「查看更多历史文章」 ---------- */
