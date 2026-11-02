@@ -1417,7 +1417,7 @@ article img {
   padding: 0 0 0 1.5rem;
 }
 
-/* 一行 = 月日 + 标题 + 分类。日期等宽数字，标题长短不一时右端才对得齐 */
+/* 一行 = 月日 + 标题 + 分类/标签。日期等宽数字，标题长短不一时右端才对得齐 */
 .archive-item {
   display: flex;
   align-items: baseline;
@@ -1434,6 +1434,9 @@ article img {
 
 .archive-link {
   flex: 1 1 auto;
+  /* ⚠️ 必须给 min-width:0：flex 项默认 min-width:auto，长标题不肯收缩，
+     会把右边那组胶囊顶出容器（窄屏上表现为横向滚动条）。 */
+  min-width: 0;
   color: var(--ink);
   text-decoration: none;
 }
@@ -1443,8 +1446,18 @@ article img {
   text-decoration: underline;
 }
 
-.archive-item .tag {
+/* 右侧胶囊组：分类（强调色）+ 标签（灰色），与首页、文章页同一套配色。
+   包一个容器是为了让整组右对齐、组内换行（标签多时），
+   而不是让每个胶囊各占一个 flex 项去和标题抢空间。 */
+.archive-meta {
   flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 0.35rem;
+  /* 上限 55%：标签再多也不至于把标题挤成一条竖线 */
+  max-width: 55%;
 }
 
 /* ---------- 空状态 ---------- */
@@ -1704,8 +1717,8 @@ article img {
   }
 }
 
-/* 归档页：窄屏改成「月日 + 分类」一行、标题单独一行。
-   原来三者挤在一行，长标题会把分类顶到很远的位置，日期也对不齐。 */
+/* 归档页：窄屏改成「月日 + 分类/标签」一行、标题单独一行。
+   原来三者挤在一行，长标题会把胶囊顶到很远的位置，日期也对不齐。 */
 @media (max-width: 520px) {
   .archive-item {
     flex-wrap: wrap;
@@ -1717,8 +1730,9 @@ article img {
     flex: 1 1 100%;
   }
 
-  .archive-item .tag {
+  .archive-meta {
     order: 2;
     margin-left: auto;
+    max-width: 75%;
   }
 }

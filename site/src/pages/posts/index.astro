@@ -69,11 +69,22 @@ for (const post of posts) {
                 <a class="archive-link" href={`/posts/${post.id}/`}>
                   {post.data.title}
                 </a>
-                {post.data.categories.map((category) => (
-                  <a class="tag" href={`/categories/${category}/`}>
-                    {category}
-                  </a>
-                ))}
+                {/* 右侧一组胶囊：分类用强调色、标签用灰色，与首页 / 文章页同一套配色。
+                    标签数量有可能很长（算法题尤其），所以整组允许换行，不挤标题。 */}
+                {(post.data.categories.length > 0 || post.data.tags.length > 0) && (
+                  <span class="archive-meta">
+                    {post.data.categories.map((category) => (
+                      <a class="tag" href={`/categories/${category}/`}>
+                        {category}
+                      </a>
+                    ))}
+                    {post.data.tags.map((tag) => (
+                      <a class="tag muted" href={`/tags/${tag}/`}>
+                        {tag}
+                      </a>
+                    ))}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
