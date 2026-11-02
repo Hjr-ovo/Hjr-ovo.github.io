@@ -163,6 +163,19 @@
   文字颜色继承正文（不另设）。
 - **必须自定底色**：浏览器默认 `<mark>` 是刺眼的纯黄，深色模式下更像一块发光白斑。
 
+**Callout 提示框（对应 Obsidian 的 `> [!NOTE]`，2026-11-02 加）**
+- 结构：`<blockquote class="callout callout-note">` + 一个 `<div class="callout-title">`（内联 SVG 图标 + 标题文字）。
+  由 `utils/remark-obsidian.mjs` 在 remark 阶段生成，**不写回 .md**。
+- 上色只靠一个变量：每类只写 `--tone`，边框 / 底色 / 图标色全由它 `color-mix` 派生。
+  新类型 = CSS 加一行 `--tone` + 插件 `CALLOUT_ALIAS` 登记，别复制整段规则。
+- 尺寸：`padding: 0.85em 1.05em`、`border-radius: 6px`、左边 3px 实色条、其余三边 1px 半透明描边。
+- 标题行 `0.92rem / 700`，图标 `1.05em` —— 图标比文字略大，才配得上 700 字重。
+- ⚠️ **`.callout` 必须显式写 `color: var(--ink)`**：普通引用块是 `--muted`（表示「这是别人的话」），
+  callout 里是自己写的正文，跟着灰掉会读不清。
+- ⚠️ 深色模式只需 3 条通用规则（底色加浓、描边提亮、标题 `color-mix` 混白），
+  **不要给 13 个类型各写一遍**。
+- 已知边界：折叠型（`[!NOTE]-`）只识别标记、不实现折叠；类型不认识（`[!FOO]`）保持普通引用。
+
 ### 4.7 数学公式（KaTeX）
 - `.katex` 字号压到 `1.05em`（默认 1.21em 偏大突兀）。
 - 行间公式 `.katex-display`：`margin: 1.4em 0; overflow-x: auto`（超宽公式横向滚，不撑破）。

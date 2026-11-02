@@ -753,6 +753,79 @@ blockquote {
 blockquote p:first-child { margin-top: 0; }
 blockquote p:last-child { margin-bottom: 0; }
 
+/* ---------- Obsidian Callout（提示框） ----------
+ * 正文里写 `> [!NOTE]`，构建时由 utils/remark-obsidian.mjs 转成
+ *   <blockquote class="callout callout-note">
+ *     <div class="callout-title"><svg…/><span>Note</span></div>
+ *     …正文…
+ *   </blockquote>
+ *
+ * 每类只改 --tone 一个变量，边框/底色/图标都由它派出来，
+ * 深色模式靠 color-mix 调比例，不必给每个类型再写一遍。
+ * ⚠️ 别在 .callout 里写死颜色 —— 深色下会留一块浅斑（同全站约定）。
+ */
+.callout {
+  --tone: #3f7bc4; /* 兜底：note 蓝 */
+  margin: 1.4em 0;
+  padding: 0.85em 1.05em;
+  border: 1px solid color-mix(in srgb, var(--tone) 20%, transparent);
+  border-left: 3px solid var(--tone);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tone) 6%, transparent);
+  /* 普通引用块是 --muted（发灰，表示「这是别人的话」）；
+     Callout 里是自己写的正文，不该跟着灰掉，所以显式压回 --ink */
+  color: var(--ink);
+}
+
+.callout > :first-child { margin-top: 0; }
+.callout > :last-child { margin-bottom: 0; }
+
+.callout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  margin-bottom: 0.55em;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--tone);
+}
+
+.callout-icon {
+  flex: none;
+  /* 图标比文字略大一点，视觉上才配得上 700 字重的标题 */
+  width: 1.05em;
+  height: 1.05em;
+}
+
+/* —— 各类型配色 ——
+ * 取的是低饱和版本：站点整体是米白 + 墨绿，饱和度高的原色会在页面上跳出来。
+ * 想加新类型：这里加一行 --tone，再在 remark 插件的 CALLOUT_ALIAS 里登记即可。 */
+.callout-note { --tone: #3f7bc4; }
+.callout-abstract { --tone: #2f8fa8; }
+.callout-info { --tone: #3f7bc4; }
+.callout-todo { --tone: #4a72c0; }
+.callout-tip { --tone: #2a9d8f; }
+.callout-success { --tone: #3f9e5f; }
+.callout-question { --tone: #b08323; }
+.callout-warning { --tone: #c9821f; }
+.callout-failure { --tone: #c0564f; }
+.callout-danger { --tone: #c0564f; }
+.callout-bug { --tone: #c0564f; }
+.callout-example { --tone: #7c5cc4; }
+.callout-quote { --tone: #8a8a80; }
+
+/* 深色：底色给得浓一点、描边和标题提亮，否则在深底上像没上色 */
+[data-theme='dark'] .callout {
+  background: color-mix(in srgb, var(--tone) 13%, transparent);
+  border-color: color-mix(in srgb, var(--tone) 28%, transparent);
+  border-left-color: color-mix(in srgb, var(--tone) 80%, white);
+}
+
+[data-theme='dark'] .callout-title {
+  color: color-mix(in srgb, var(--tone) 62%, white);
+}
+
 /* 分隔线 */
 hr {
   border: none;
