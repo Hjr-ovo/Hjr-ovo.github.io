@@ -2,20 +2,29 @@
 // 关于页：/about/
 //
 // 这一页只有排版，文字全在 src/data/about.ts —— 想改介绍内容只改那个文件。
-// 页面里唯一的「活数据」是文章数 / 分类数 / 标签数：构建时从文章集合里现算，
+// 页面里唯一的「活数据」是文章数 / 总字数 / 分类数 / 标签数：构建时从文章集合里现算，
 // 免得出现「关于页说 6 篇、首页其实 7 篇」这种对不上的情况。
 
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { SITE } from '../consts';
 import { ABOUT } from '../data/about';
+import { formatWords, withWordCount } from '../utils/word-count';
 
-const posts = await getCollection('posts', ({ data }) => !data.draft);
+// withWordCount 给每篇补上 words（口径见 utils/word-count.ts，不含代码），
+// 加起来就是全站总字数 —— 和卡片上显示的字数同一套口径，不会对不上
+const posts = withWordCount(
+  await getCollection('posts', ({ data }) => !data.draft),
+);
+
+const totalWords = posts.reduce((sum, post) => sum + post.words, 0);
 
 const stats = [
-  { num: posts.length, label: '篇文章' },
-  { num: new Set(posts.flatMap((post) => post.data.categories)).size, label: '个分类' },
-  { num: new Set(posts.flatMap((post) => post.data.tags)).size, label: '个标签' },
+  { num: String(posts.length), label: '篇文章' },
+  // 总字数带千分位：四位数以上不加逗号读起来要数位数
+  { num: formatWords(totalWords), label: '字' },
+  { num: String(new Set(posts.flatMap((post) => post.data.categories)).size), label: '个分类' },
+  { num: String(new Set(posts.flatMap((post) => post.data.tags)).size), label: '个标签' },
 ];
 ---
 
@@ -35,8 +44,9 @@ const stats = [
       </div>
     </header>
 
-    {/* 三个数字放最前面：读者想知道的「这个站在不在更新、内容够不够多」，
-        一眼就能看到；本节其它文字（2026-11-01 起）都已经删掉。 */}
+    {/* 四个数字放最前面：读者想知道的「这个站在不在更新、内容够不够多」，
+        一眼就能看到；本节其它文字（2026-11-01 起）都已经删掉。
+        顺序：篇数 → 总字数 → 分类 → 标签，前两个说体量、后两个说组织方式。 */}
     <ul class="about-stats">
       {stats.map((stat) => (
         <li>
