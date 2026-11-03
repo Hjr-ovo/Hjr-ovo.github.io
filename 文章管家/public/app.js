@@ -435,6 +435,15 @@ function renderList() {
   if (sort === 'title') list = list.slice().sort((a, b) => a.title.localeCompare(b.title, 'zh'));
   if (sort === 'chars') list = list.slice().sort((a, b) => b.chars - a.chars);
 
+  // 选中某个分类 / 标签时，把命中的文章排到最前面（各自内部仍按上面的排序）。
+  // 灰化由 .grid.filtering .card 负责，这里只动顺序，不改变「谁被选中」这件事。
+  if (state.selected) {
+    const hit = [];
+    const rest = [];
+    for (const p of list) (matches(p, state.selected) ? hit : rest).push(p);
+    list = hit.concat(rest);
+  }
+
   const grid = $('postGrid');
   grid.classList.toggle('filtering', !!state.selected);
 
@@ -461,6 +470,13 @@ function openDrawer(kind) {
   // 换抽屉就把搜索条件清掉：从「标签」切到「分类」还留着上一个关键词只会让人困惑
   $('drawerSearch').value = '';
   $('drawerSearch').placeholder = kind === 'trash' ? '搜索回收箱' : `搜索${KIND_CN[kind]}`;
+
+  // 「＋ 新建」只在标签 / 分类抽屉出现，回收箱没有这个概念
+  const newBtn = $('btnNewTerm');
+  if (newBtn) {
+    newBtn.hidden = kind === 'trash';
+    newBtn.textContent = `＋ 新建${KIND_CN[kind] || ''}`;
+  }
   $('drawer').hidden = false;
   $('resizerDrawer').hidden = false;
   // 宽度不用管：applyLayout 里 --drawer-w 取 layout.drawer || layout.side，
@@ -511,9 +527,87 @@ function renderDrawer() {
       const sel = state.selected && state.selected.kind === kind && state.selected.name === it.name;
       return `<div class="drawer-item${sel ? ' selected' : ''}" draggable="true" data-kind="${kind}" data-term="${esc(it.name)}" title="拖到文章上，或点一下高亮同类">
         <i class="mark"></i><span class="name">${esc(it.name)}</span><span class="count">${it.count}</span>
+        <span class="item-actions">
+          <button type="button" class="icon-btn" data-term-act="rename" draggable="false" title="重命名">✎</button>
+          <button type="button" class="icon-btn danger" data-term-act="delete" draggable="false" title="删除">×</button>
+        </span>
       </div>`;
     })
     .join('');
+}
+
+// ---------- 新建 / 重命名 / 删除 分类、标签 ----------
+//
+// 用浏览器原生的 prompt / confirm，和「删除文章」那套确认保持一致，不额外造弹窗。
+// 分类 / 标签没有独立数据：改名和删除会扫全部文章，把引用一起改掉。
+
+async function createTerm(kind) {
+  const name = prompt(`新建${KIND_CN[kind]}：\n起个名字就好，之后把文章拖进来即可。`);
+  if (name === null) return;
+  const term = name.trim();
+  if (!term) return;
+  try {
+    await api('/api/taxonomy', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'create', kind, name: term }),
+    });
+    toast(`已新建${KIND_CN[kind]}「${term}」`);
+    // 新建后直接选中它，并清掉搜索，免得刚建的就因为搜索词看不见
+    $('drawerSearch').value = '';
+    state.selected = { kind, name: term };
+    await refreshMeta();
+    renderList();
+    syncNav();
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function renameTerm(kind, oldName) {
+  const name = prompt(`把${KIND_CN[kind]}「${oldName}」改成：`, oldName);
+  if (name === null) return;
+  const term = name.trim();
+  if (!term || term === oldName) return;
+  try {
+    const res = await api('/api/taxonomy', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'rename', kind, oldName, newName: term }),
+    });
+    toast(res.affected ? `已改名，更新了 ${res.affected} 篇文章` : '已改名');
+    if (state.selected && state.selected.kind === kind && state.selected.name === oldName) {
+      state.selected = { kind, name: term };
+    }
+    await Promise.all([loadPosts(), refreshMeta()]);
+    syncNav();
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function removeTerm(kind, name) {
+  const item = ((state.meta && state.meta[kind]) || []).find((x) => x.name === name);
+  const count = item ? item.count : 0;
+  const ok = confirm(
+    `删除${KIND_CN[kind]}「${name}」？\n\n` +
+      (count > 0
+        ? `· ${count} 篇文章会失去这个${KIND_CN[kind]}\n· 文章本身不会被删，只是不再归在这一类\n· 这一步没法撤销`
+        : '· 它现在没有挂任何文章\n· 删掉后列表里就看不到了'),
+  );
+  if (!ok) return;
+  try {
+    const res = await api('/api/taxonomy', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'delete', kind, name }),
+    });
+    toast(res.affected ? `已删除，${res.affected} 篇文章已移出该${KIND_CN[kind]}` : '已删除');
+    if (state.selected && state.selected.kind === kind && state.selected.name === name) {
+      state.selected = null;
+    }
+    await Promise.all([loadPosts(), refreshMeta()]);
+    syncNav();
+  } catch (err) {
+    toast(err.message, true);
+  }
 }
 
 // ---------- 回收箱 ----------
@@ -688,6 +782,11 @@ function bindDrag() {
   list.addEventListener('dragstart', (e) => {
     const item = e.target.closest('.drawer-item');
     if (!item) return;
+    // 从「改名 / 删除」按钮上按下时不要开始拖整项
+    if (e.target.closest('.item-actions')) {
+      e.preventDefault();
+      return;
+    }
     state.drag = { type: 'term', kind: item.dataset.kind, name: item.dataset.term };
     e.dataTransfer.effectAllowed = 'copy';
     e.dataTransfer.setData('text/plain', item.dataset.term);
@@ -740,8 +839,17 @@ function bindDrag() {
     await addTerm(slug, item.dataset.kind, item.dataset.term);
   });
 
-  // --- 抽屉项点击：高亮同类文章，再点取消 ---
+  // --- 抽屉项点击：先看是不是点了改名 / 删除，否则才是「高亮同类」 ---
   list.addEventListener('click', (e) => {
+    const act = e.target.closest('[data-term-act]');
+    if (act) {
+      const row = act.closest('.drawer-item');
+      if (!row) return;
+      e.stopPropagation();
+      if (act.dataset.termAct === 'rename') return renameTerm(row.dataset.kind, row.dataset.term);
+      if (act.dataset.termAct === 'delete') return removeTerm(row.dataset.kind, row.dataset.term);
+      return;
+    }
     const item = e.target.closest('.drawer-item');
     if (!item) return;
     const kind = item.dataset.kind;
@@ -1045,6 +1153,11 @@ function bind() {
   );
 
   $('drawerClose').addEventListener('click', closeDrawer);
+
+  // 「＋ 新建」：按钮在抽屉里，按当前抽屉的类型决定建分类还是标签
+  $('btnNewTerm').addEventListener('click', () => {
+    if (state.drawer && KIND_CN[state.drawer]) createTerm(state.drawer);
+  });
 
   $('drawerSearch').addEventListener('input', renderDrawer);
   $('drawerSearch').addEventListener('keydown', (e) => {

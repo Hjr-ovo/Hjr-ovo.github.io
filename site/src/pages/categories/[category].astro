@@ -12,6 +12,7 @@ import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { formatDate, isoDate } from '../../utils/format-date';
 import { withWordCount } from '../../utils/word-count';
+import { CATEGORY_DESC } from '../../data/categories';
 
 export async function getStaticPaths() {
   const posts = await getCollection('posts', ({ data }) => !data.draft);
@@ -48,6 +49,7 @@ const category = Astro.params.category;
   <header class="page-head">
     <h1>{category}</h1>
     <p class="post-meta">{posts.length} 篇文章</p>
+    {CATEGORY_DESC[category] && <p class="cat-desc">{CATEGORY_DESC[category]}</p>}
   </header>
 
   <ul class="post-list">

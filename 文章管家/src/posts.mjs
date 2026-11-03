@@ -281,10 +281,150 @@ export async function taxonomy() {
     for (const t of p.tags) tagMap.set(t, (tagMap.get(t) || 0) + 1);
   }
 
+  // 手动建过、但暂时没有文章引用的项：从持久化清单补进来，计数 0。
+  // 分类 / 标签平时是「从文章现算」的，没有独立存储；不补这一步，
+  // 新建的分类会因为没有任何文章而立刻从抽屉里消失。
+  const extra = await readExtra();
+  for (const c of extra.categories) if (!catMap.has(c)) catMap.set(c, 0);
+  for (const t of extra.tags) if (!tagMap.has(t)) tagMap.set(t, 0);
+
   const toArr = (m) =>
     [...m.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh'));
 
   return { categories: toArr(catMap), tags: toArr(tagMap), today: today() };
+}
+
+// ---------- 分类 / 标签 的增删改 ----------
+//
+// 分类和标签本来是「从所有文章的 frontmatter 现算」的，没有独立存储。
+// 但「新建」一个暂时没挂文章的分类时，现算就拿不到它，于是这里补一个很小的
+// 持久化清单，只存**零计数**的名字；文章仍然是计数和归类的事实来源。
+// 改名 / 删除则要扫全部文章，把引用一起改掉。
+
+const TAXONOMY_FILE = path.resolve(__dirname, '../taxonomy-extra.json');
+const KIND_LABEL = { categories: '分类', tags: '标签' };
+
+function kindKey(kind) {
+  if (kind === 'categories') return 'categories';
+  if (kind === 'tags') return 'tags';
+  throw Object.assign(new Error('只能是 tags 或 categories'), { code: 'INVALID' });
+}
+
+function normTerm(name) {
+  const term = String(name ?? '').trim();
+  if (!term) throw Object.assign(new Error('名称不能为空'), { code: 'INVALID' });
+  return term;
+}
+
+async function readExtra() {
+  try {
+    const raw = await fs.readFile(TAXONOMY_FILE, 'utf8');
+    const data = JSON.parse(raw);
+    return {
+      categories: Array.isArray(data.categories) ? data.categories.map(String) : [],
+      tags: Array.isArray(data.tags) ? data.tags.map(String) : [],
+    };
+  } catch {
+    return { categories: [], tags: [] };
+  }
+}
+
+async function writeExtra(data) {
+  const clean = {
+    categories: [...new Set(data.categories.map((s) => String(s).trim()).filter(Boolean))],
+    tags: [...new Set(data.tags.map((s) => String(s).trim()).filter(Boolean))],
+  };
+  await writeAtomic(TAXONOMY_FILE, JSON.stringify(clean, null, 2) + '\n');
+}
+
+/** 当前所有名字（含零计数项） */
+async function allNames(key) {
+  const tx = await taxonomy();
+  return tx[key].map((it) => it.name);
+}
+
+/** 把一篇文章的某个字段整体换成 next（用于改名 / 删除时批量改引用） */
+async function writeTermsOfPost(slug, key, next) {
+  const current = await readPost(slug);
+  const { content, changedKeys } = patchMeta(current.raw, { [key]: next });
+  if (changedKeys.length === 0) return false;
+  await writeAtomic(fileOf(slug), content);
+  return true;
+}
+
+/** 新建一个分类 / 标签（暂时没挂文章也能存在） */
+export async function createTerm(kind, name) {
+  const key = kindKey(kind);
+  const term = normTerm(name);
+
+  if ((await allNames(key)).includes(term)) {
+    throw Object.assign(new Error(`已经有${KIND_LABEL[key]}「${term}」了`), { code: 'EXISTS' });
+  }
+
+  const extra = await readExtra();
+  extra[key].push(term);
+  await writeExtra(extra);
+  return { created: true, kind: key, name: term };
+}
+
+/** 改名：所有引用它的文章一起改，清单里的零计数项也改 */
+export async function renameTerm(kind, oldName, newName) {
+  const key = kindKey(kind);
+  const from = normTerm(oldName);
+  const to = normTerm(newName);
+  if (from === to) return { renamed: false, kind: key, oldName: from, newName: to, affected: 0 };
+
+  const names = await allNames(key);
+  if (!names.includes(from)) {
+    throw Object.assign(new Error(`没有${KIND_LABEL[key]}「${from}」`), { code: 'NOT_FOUND' });
+  }
+  if (names.includes(to)) {
+    throw Object.assign(new Error(`已经有「${to}」了，换个名字`), { code: 'EXISTS' });
+  }
+
+  const { posts } = await listPosts();
+  let affected = 0;
+  for (const p of posts) {
+    const list = key === 'categories' ? p.categories : p.tags;
+    if (!list.includes(from)) continue;
+    const next = list.map((x) => (x === from ? to : x));
+    if (await writeTermsOfPost(p.slug, key, next)) affected++;
+  }
+
+  const extra = await readExtra();
+  if (extra[key].includes(from)) {
+    extra[key] = extra[key].map((x) => (x === from ? to : x));
+    await writeExtra(extra);
+  }
+
+  return { renamed: true, kind: key, oldName: from, newName: to, affected };
+}
+
+/** 删除：所有引用它的文章都移掉这一项，清单里也删掉；文章本身不动 */
+export async function deleteTerm(kind, name) {
+  const key = kindKey(kind);
+  const term = normTerm(name);
+
+  if (!(await allNames(key)).includes(term)) {
+    throw Object.assign(new Error(`没有${KIND_LABEL[key]}「${term}」`), { code: 'NOT_FOUND' });
+  }
+
+  const { posts } = await listPosts();
+  let affected = 0;
+  for (const p of posts) {
+    const list = key === 'categories' ? p.categories : p.tags;
+    if (!list.includes(term)) continue;
+    const next = list.filter((x) => x !== term);
+    if (await writeTermsOfPost(p.slug, key, next)) affected++;
+  }
+
+  const extra = await readExtra();
+  if (extra[key].includes(term)) {
+    extra[key] = extra[key].filter((x) => x !== term);
+    await writeExtra(extra);
+  }
+
+  return { deleted: true, kind: key, name: term, affected };
 }
 
 /** 文件名是否被占用（站内 + 回收箱，都用同一个名字会互相顶） */

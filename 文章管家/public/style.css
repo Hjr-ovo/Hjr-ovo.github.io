@@ -244,6 +244,15 @@ body.resizing {
   border-radius: 7px;
 }
 
+/* 搜索框下面的「＋ 新建」整条按钮 */
+.drawer-new {
+  padding: 0 8px 8px;
+}
+
+.drawer-new .btn {
+  width: 100%;
+}
+
 .drawer-list {
   overflow: auto;
   padding: 0 8px 16px;
@@ -284,6 +293,41 @@ body.resizing {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   flex: none;
+}
+
+/* 悬停 / 选中时才露出的「改名 / 删除」两个小按钮。
+   平时不占位，鼠标移上去才出现 —— 抽屉本身很窄，常驻会挤掉名字。 */
+.item-actions {
+  display: none;
+  gap: 2px;
+  margin-left: 2px;
+  flex: none;
+}
+
+.drawer-item:hover .item-actions,
+.drawer-item.selected .item-actions {
+  display: flex;
+}
+
+.icon-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--chip-bg);
+  color: var(--ink);
+}
+
+.icon-btn.danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 /* 分类用实心小方块、标签用小圆点，一眼区分两种抽屉 */

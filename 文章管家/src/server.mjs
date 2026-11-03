@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exec } from 'node:child_process';
 
-import { listPosts, readPost, savePost, updateTerms, taxonomy, moveToTrash, listTrash, restoreTrash, purgeTrash } from './posts.mjs';
+import { listPosts, readPost, savePost, updateTerms, taxonomy, createTerm, renameTerm, deleteTerm, moveToTrash, listTrash, restoreTrash, purgeTrash } from './posts.mjs';
 import { analyze, writePost, existingCategories } from './ingest.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -98,6 +98,22 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'GET' && url.pathname === '/api/taxonomy') {
     return json(res, 200, await taxonomy());
+  }
+
+  // 分类 / 标签的增删改（drawer 里的「新建 / 重命名 / 删除」）
+  if (req.method === 'POST' && url.pathname === '/api/taxonomy') {
+    const body = await readBody(req);
+    try {
+      let result;
+      if (body.action === 'create') result = await createTerm(body.kind, body.name);
+      else if (body.action === 'rename') result = await renameTerm(body.kind, body.oldName, body.newName);
+      else if (body.action === 'delete') result = await deleteTerm(body.kind, body.name);
+      else return json(res, 400, { error: '未知操作', code: 'INVALID' });
+      return json(res, 200, result);
+    } catch (err) {
+      const status = err.code === 'EXISTS' ? 409 : err.code === 'NOT_FOUND' ? 404 : err.code === 'INVALID' ? 422 : 500;
+      return json(res, status, { error: err.message, code: err.code });
+    }
   }
 
   if (parts[0] === 'api' && parts[1] === 'posts' && parts.length === 3) {

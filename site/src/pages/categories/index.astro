@@ -9,6 +9,7 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { formatDate } from '../../utils/format-date';
+import { CATEGORY_DESC } from '../../data/categories';
 
 const posts = await getCollection('posts', ({ data }) => !data.draft);
 
@@ -54,6 +55,7 @@ const categorizedCount = posts.filter((post) => post.data.categories.length > 0)
         <span class="cat-name">{cat.name}</span>
         <span class="cat-count">{cat.count} 篇</span>
         <span class="cat-latest">最近更新 {formatDate(cat.latest)}</span>
+        {CATEGORY_DESC[cat.name] && <span class="cat-desc">{CATEGORY_DESC[cat.name]}</span>}
       </a>
     ))}
   </div>
