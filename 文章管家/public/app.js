@@ -507,7 +507,9 @@ function renderDrawer() {
   // 没搜的时候讲怎么拖；搜了以后改成报匹配数，否则用户不知道筛掉了多少
   $('drawerHint').textContent = q
     ? `匹配 ${list.length} / ${all.length} 个${KIND_CN[kind]}`
-    : `把${KIND_CN[kind]}拖到文章上即可添加；右键可新建 / 改名 / 删除`;
+    : kind === 'categories'
+      ? '拖到文章上即可添加；右键可编辑简介 / 改名 / 删除'
+      : `把${KIND_CN[kind]}拖到文章上即可添加；右键可新建 / 改名 / 删除`;
 
   if (all.length === 0) {
     box.innerHTML = `<div class="drawer-empty">还没有${KIND_CN[kind]}</div>`;
@@ -518,10 +520,15 @@ function renderDrawer() {
     return;
   }
 
+  const descs = (state.meta && state.meta.descs) || {};
+
   box.innerHTML = list
     .map((it) => {
       const sel = state.selected && state.selected.kind === kind && state.selected.name === it.name;
-      return `<div class="drawer-item${sel ? ' selected' : ''}" draggable="true" data-kind="${kind}" data-term="${esc(it.name)}" title="拖到文章上，或点一下高亮同类；右键可新建 / 改名 / 删除">
+      // 有简介的分类把简介挂进 title：抽屉很窄，不适合再塞一行字
+      const desc = kind === 'categories' ? descs[it.name] : '';
+      const tip = `拖到文章上，或点一下高亮同类；右键可操作${desc ? `\n简介：${desc}` : ''}`;
+      return `<div class="drawer-item${sel ? ' selected' : ''}" draggable="true" data-kind="${kind}" data-term="${esc(it.name)}" title="${esc(tip)}">
         <i class="mark"></i><span class="name">${esc(it.name)}</span><span class="count">${it.count}</span>
       </div>`;
     })
@@ -602,10 +609,42 @@ async function removeTerm(kind, name) {
   }
 }
 
+// ---------- 分类简介 ----------
+//
+// 简介不属于文章，存在博客仓库的 site/src/data/categories.ts；
+// 保存后 dev 会自动刷新，正式站要重新构建才看得到。
+//
+// 用 prompt 而不是自定义弹窗：和「重命名」一致，而且是一句话的东西。
+// 预填当前值，直接回车不改；清空则删掉这条简介。
+
+async function editCategoryDesc(name) {
+  const cur = (state.meta && state.meta.descs && state.meta.descs[name]) || '';
+  const text = prompt(
+    `给分类「${name}」写一句简介：\n\n` +
+      '· 会显示在「分类」列表的卡片上，以及该分类页标题下面\n' +
+      '· 一句话就够，留空表示不要简介',
+    cur,
+  );
+  if (text === null) return;
+
+  try {
+    const res = await api('/api/taxonomy', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'desc', name, desc: text }),
+    });
+    if (!res.changed) toast('简介没有变化');
+    else if (!res.desc) toast(`已清空「${name}」的简介`);
+    else toast(`已保存「${name}」的简介`);
+    await refreshMeta(); // 里面会重绘抽屉，title 上的简介跟着更新
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
 // ---------- 右键菜单：新建 / 改名 / 删除 ----------
 //
 // 2026-11-03 用户要求：抽屉里不放小按钮，改成右键唤出。
-// 菜单只有三种动作，直接拆 DOM 拼，不引组件。
+// 菜单只有几种动作，直接拆 DOM 拼，不引组件。
 // 用 fixed + 贴边夹取：抽屉窄，靠屏幕右边 / 底边右键也能完整看到。
 //
 // ctxTarget 记住「右键点的是哪一项」：name 为 null 表示点的是空白区（只能新建）。
@@ -647,7 +686,10 @@ function bindCtx() {
     const item = e.target.closest('.drawer-item');
     if (item) {
       ctxTarget = { kind, name: item.dataset.term };
+      const hasDesc = kind === 'categories' && !!(state.meta.descs && state.meta.descs[item.dataset.term]);
       openCtx(e.clientX, e.clientY, [
+        // 简介只有分类有：站点的标签页没有「简介」这个概念
+        ...(kind === 'categories' ? [{ id: 'desc', label: hasDesc ? '编辑简介' : '写简介' }] : []),
         { id: 'rename', label: '重命名' },
         { id: 'delete', label: '删除', danger: true },
         { sep: true },
@@ -667,6 +709,7 @@ function bindCtx() {
     const act = btn.dataset.ctxAct;
     closeCtx();
     if (act === 'create') return createTerm(kind);
+    if (act === 'desc' && name) return editCategoryDesc(name);
     if (act === 'rename' && name) return renameTerm(kind, name);
     if (act === 'delete' && name) return removeTerm(kind, name);
   });

@@ -291,7 +291,7 @@ export async function taxonomy() {
   const toArr = (m) =>
     [...m.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'zh'));
 
-  return { categories: toArr(catMap), tags: toArr(tagMap), today: today() };
+  return { categories: toArr(catMap), tags: toArr(tagMap), descs: await readCategoryDescs(), today: today() };
 }
 
 // ---------- 分类 / 标签 的增删改 ----------
@@ -397,6 +397,9 @@ export async function renameTerm(kind, oldName, newName) {
     await writeExtra(extra);
   }
 
+  // 简介跟着分类走，不然改完名字简介就挂在一个不存在的分类上了
+  if (key === 'categories') await syncDescOnRename(from, to);
+
   return { renamed: true, kind: key, oldName: from, newName: to, affected };
 }
 
@@ -424,7 +427,138 @@ export async function deleteTerm(kind, name) {
     await writeExtra(extra);
   }
 
+  // 分类删了，它的简介也一起清掉
+  if (key === 'categories') await syncDescOnDelete(term);
+
   return { deleted: true, kind: key, name: term, affected };
+}
+
+// ---------- 分类简介 ----------
+//
+// 简介是「分类」自己的属性，不属于任何一篇文章，所以没法存 frontmatter，
+// 它写在博客仓库的 site/src/data/categories.ts 里（分类页构建时 import 它）。
+// 这是本工具**唯一**会写的非文章文件，所以要格外小心：
+//   读 = 用正则把键值对抠出来；写 = 整份重新生成。
+//
+// ⚠️ 重新生成会丢掉文件里原有的注释，所以文件头固定由这里写。
+//    手工加的行能读回来（下次保存时保留），手写的注释则会消失。
+
+const DESC_FILE = path.join(SITE_DIR, 'src', 'data', 'categories.ts');
+
+const DESC_HEADER = `// 分类说明：给每个分类写一句简介。
+//
+// 显示在「分类」总览页的卡片上，以及该分类详情页的标题下方。
+// 只出现在本表的分类才显示说明；没写的分类不显示，不影响其它功能。
+//
+// ⚠️ 这个文件由文章管家的「编辑简介」生成，保存时会整份重写（这里原有的注释会丢）。
+// 手工加行也可以，格式照 '分类名': '说明', —— 在管家里改别的分类时会把它读进来。
+
+`;
+
+// 单引号或双引号字符串（认转义），用来匹配 `'名字': '说明'`
+const STR_SRC = String.raw`'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"`;
+const DESC_PAIR = new RegExp(`(${STR_SRC})\\s*:\\s*(${STR_SRC})`, 'g');
+
+function unescapeJs(s) {
+  return s.replace(/\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|[\s\S])/g, (m, c) => {
+    if (c.length === 5 && c[0] === 'u') return String.fromCharCode(parseInt(c.slice(1), 16));
+    if (c.length === 3 && c[0] === 'x') return String.fromCharCode(parseInt(c.slice(1), 16));
+    if (c === 'n') return '\n';
+    if (c === 't') return '\t';
+    if (c === 'r') return '\r';
+    return c;
+  });
+}
+
+function escapeJs(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/[\r\n]+/g, ' ');
+}
+
+function parseDescFile(raw) {
+  const at = raw.indexOf('CATEGORY_DESC');
+  const start = at >= 0 ? raw.indexOf('{', at) : -1;
+  const end = raw.lastIndexOf('}');
+  if (start < 0 || end <= start) return {};
+
+  // 先按行剔掉注释，避免把注释掉的示例行读成真数据
+  const body = raw
+    .slice(start + 1, end)
+    .split('\n')
+    .filter((line) => {
+      const t = line.trim();
+      return t && !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
+    })
+    .join('\n');
+
+  const descs = {};
+  DESC_PAIR.lastIndex = 0;
+  let m;
+  while ((m = DESC_PAIR.exec(body))) {
+    const key = unescapeJs(m[1].slice(1, -1)).trim();
+    const val = unescapeJs(m[2].slice(1, -1)).trim();
+    if (key && val) descs[key] = val;
+  }
+  return descs;
+}
+
+function renderDescFile(descs) {
+  const lines = Object.entries(descs).map(([k, v]) => `  '${escapeJs(k)}': '${escapeJs(v)}',`);
+  return `${DESC_HEADER}export const CATEGORY_DESC: Record<string, string> = {\n${lines.map((l) => l + '\n').join('')}};\n`;
+}
+
+export async function readCategoryDescs() {
+  try {
+    return parseDescFile(await fs.readFile(DESC_FILE, 'utf8'));
+  } catch {
+    return {}; // 文件不在 = 一个简介都没写，不是错误
+  }
+}
+
+async function writeCategoryDescs(map) {
+  await fs.mkdir(path.dirname(DESC_FILE), { recursive: true });
+  await writeAtomic(DESC_FILE, renderDescFile(map));
+}
+
+/** 设/清一个分类的简介。desc 传空串 = 删掉这条简介（文件里那行消失）。 */
+export async function setCategoryDesc(name, desc) {
+  const term = normTerm(name);
+  if (!(await allNames('categories')).includes(term)) {
+    throw Object.assign(new Error(`没有分类「${term}」`), { code: 'NOT_FOUND' });
+  }
+
+  const text = String(desc ?? '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+  const map = await readCategoryDescs();
+  const has = Object.prototype.hasOwnProperty.call(map, term);
+
+  if (!text) {
+    if (!has) return { name: term, desc: '', changed: false };
+    delete map[term];
+  } else {
+    if (map[term] === text) return { name: term, desc: text, changed: false };
+    map[term] = text;
+  }
+
+  await writeCategoryDescs(map);
+  return { name: term, desc: text, changed: true };
+}
+
+/** 改名 / 删除分类时，把简介跟着搬走或清掉（否则会留在一个不存在的名字上） */
+async function syncDescOnRename(from, to) {
+  const map = await readCategoryDescs();
+  if (!Object.prototype.hasOwnProperty.call(map, from)) return;
+  const next = {};
+  for (const [k, v] of Object.entries(map)) next[k === from ? to : k] = v;
+  await writeCategoryDescs(next);
+}
+
+async function syncDescOnDelete(name) {
+  const map = await readCategoryDescs();
+  if (!Object.prototype.hasOwnProperty.call(map, name)) return;
+  delete map[name];
+  await writeCategoryDescs(map);
 }
 
 /** 文件名是否被占用（站内 + 回收箱，都用同一个名字会互相顶） */

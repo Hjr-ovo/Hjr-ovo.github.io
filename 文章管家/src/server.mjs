@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exec } from 'node:child_process';
 
-import { listPosts, readPost, savePost, updateTerms, taxonomy, createTerm, renameTerm, deleteTerm, moveToTrash, listTrash, restoreTrash, purgeTrash } from './posts.mjs';
+import { listPosts, readPost, savePost, updateTerms, taxonomy, createTerm, renameTerm, deleteTerm, setCategoryDesc, moveToTrash, listTrash, restoreTrash, purgeTrash } from './posts.mjs';
 import { analyze, writePost, existingCategories } from './ingest.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -101,6 +101,7 @@ async function handleApi(req, res, url) {
   }
 
   // 分类 / 标签的增删改（drawer 里的「新建 / 重命名 / 删除」）
+  // action=desc 是分类简介，落在博客仓库的 site/src/data/categories.ts
   if (req.method === 'POST' && url.pathname === '/api/taxonomy') {
     const body = await readBody(req);
     try {
@@ -108,6 +109,7 @@ async function handleApi(req, res, url) {
       if (body.action === 'create') result = await createTerm(body.kind, body.name);
       else if (body.action === 'rename') result = await renameTerm(body.kind, body.oldName, body.newName);
       else if (body.action === 'delete') result = await deleteTerm(body.kind, body.name);
+      else if (body.action === 'desc') result = await setCategoryDesc(body.name, body.desc);
       else return json(res, 400, { error: '未知操作', code: 'INVALID' });
       return json(res, 200, result);
     } catch (err) {
