@@ -11,6 +11,9 @@
 
 :root {
   --ink: #2c2c2a;
+  /* 介于 --ink 与 --muted 之间：给「内容但不必最重」的段落用（如分类说明），
+     和 --muted 的纯元信息一眼能分开 */
+  --ink-soft: #4a4842;
   --muted: #6b6a65;
   /* 比 --muted 再淡一档，只给日期这种「有就行、不该抢眼」的附属信息用 */
   --faint: #a3a19a;
@@ -55,6 +58,7 @@
  */
 [data-theme='dark'] {
   --ink: #e7e5de;
+  --ink-soft: #c6c4bc;
   --muted: #9c9a92;
   --faint: #6e6c65;
   --line: #2f322c;
@@ -1359,18 +1363,23 @@ article img {
   color: var(--accent);
 }
 
+/* 「最近更新」是纯元信息，用最淡一档灰，让下面的说明文字能立起来 */
 .cat-latest {
-  font-size: 0.8rem;
-  color: var(--muted);
+  font-size: 0.78rem;
+  color: var(--faint);
 }
 
 /* 分类说明：总览卡片上跟在「最近更新」下面；详情页上跟在标题下。
-   用比分类名更淡的一档灰，和卡片里的其它附属信息拉开层级。 */
+ * 2026-11-03 改：原来和「最近更新」同为 --muted，两行灰字连在一起读不出
+ * 哪句是时间、哪句是说明。现在三件事一起做——上面拉一条虚线分开、
+ * 墨色提一档（--ink-soft，比元信息重、比标题轻）、字号略增。 */
 .cat-desc {
-  font-size: 0.82rem;
-  color: var(--muted);
-  line-height: 1.5;
-  margin-top: 0.2rem;
+  margin-top: 0.55rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--line);
+  font-size: 0.83rem;
+  color: var(--ink-soft);
+  line-height: 1.55;
 }
 
 /* 分类详情页页头：标题 + 文章数（不在 article 里，需单独给一点下边距） */
@@ -1384,9 +1393,12 @@ article img {
   margin-bottom: 0.4rem;
 }
 
-/* 详情页的分类说明：比卡片里略大一点，作为页头的一句引导语 */
+/* 详情页的分类说明：比卡片里略大一点，作为页头的一句引导语。
+ * 页头自己已有下边框收口，这里再去掉卡片上的虚线与上内边距，免得线太多。 */
 .page-head .cat-desc {
   margin-top: 0.5rem;
+  padding-top: 0;
+  border-top: 0;
   font-size: 0.95rem;
 }
 

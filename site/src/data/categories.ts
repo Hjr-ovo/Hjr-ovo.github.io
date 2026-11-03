@@ -7,4 +7,6 @@
 // 手工加行也可以，格式照 '分类名': '说明', —— 在管家里改别的分类时会把它读进来。
 
 export const CATEGORY_DESC: Record<string, string> = {
+  'leetcode解答': '这个分类记录了我的leetcode的解答',
+  '软件工程理论与实践': '里面是在校课程《软件工程理论与实践》的一些笔记',
 };
