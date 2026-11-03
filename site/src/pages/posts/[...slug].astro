@@ -15,6 +15,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import TableOfContents from '../../components/TableOfContents.astro';
 import { formatDate, isoDate } from '../../utils/format-date';
 import { findRelated } from '../../utils/related-posts';
+import { countWords, formatWords } from '../../utils/word-count';
 
 export async function getStaticPaths() {
   const posts = await getCollection('posts', ({ data }) => !data.draft);
@@ -29,6 +30,9 @@ export async function getStaticPaths() {
 const { post } = Astro.props;
 // render() 除了正文组件，还顺手给出 headings（标题树）—— 目录导航的数据源
 const { Content, headings } = await render(post);
+
+// 字数：构建时按正文 Markdown 数一次，口径见 utils/word-count.ts（不含代码）
+const words = countWords(post.body ?? '');
 
 // 相关文章：拿全部已发布文章来比，规则见 utils/related-posts.ts
 const allPosts = await getCollection('posts', ({ data }) => !data.draft);
@@ -68,6 +72,7 @@ const moreTitle = related.length > 0 ? '相关文章' : '继续阅读';
               </time>
             </>
           )}
+          {words > 0 && ` · ${formatWords(words)} 字`}
         </p>
 
         <div class="tag-row" data-pagefind-ignore>
