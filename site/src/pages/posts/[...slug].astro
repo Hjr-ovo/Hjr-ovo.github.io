@@ -100,6 +100,7 @@ const moreTitle = related.length > 0 ? '相关文章' : '继续阅读';
               <p class="related-meta">
                 {formatDate(item.data.pubDate)}{item.data.categories.length > 0 && ` · ${item.data.categories.join(' · ')}`}
               </p>
+              <span class="related-arrow" aria-hidden="true">→</span>
             </li>
           ))}
         </ul>
