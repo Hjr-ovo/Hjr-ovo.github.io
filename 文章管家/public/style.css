@@ -245,14 +245,6 @@ body.resizing {
 }
 
 /* 搜索框下面的「＋ 新建」整条按钮 */
-.drawer-new {
-  padding: 0 8px 8px;
-}
-
-.drawer-new .btn {
-  width: 100%;
-}
-
 .drawer-list {
   overflow: auto;
   padding: 0 8px 16px;
@@ -293,41 +285,6 @@ body.resizing {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   flex: none;
-}
-
-/* 悬停 / 选中时才露出的「改名 / 删除」两个小按钮。
-   平时不占位，鼠标移上去才出现 —— 抽屉本身很窄，常驻会挤掉名字。 */
-.item-actions {
-  display: none;
-  gap: 2px;
-  margin-left: 2px;
-  flex: none;
-}
-
-.drawer-item:hover .item-actions,
-.drawer-item.selected .item-actions {
-  display: flex;
-}
-
-.icon-btn {
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1;
-  padding: 2px 4px;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.icon-btn:hover {
-  background: var(--chip-bg);
-  color: var(--ink);
-}
-
-.icon-btn.danger:hover {
-  background: var(--danger-soft);
-  color: var(--danger);
 }
 
 /* 分类用实心小方块、标签用小圆点，一眼区分两种抽屉 */
@@ -1275,6 +1232,55 @@ body:has(.modal:not([hidden])) .toast {
 
 body:has(.modal:not([hidden])) .toast.show {
   transform: translateX(-50%) translateY(0);
+}
+
+/* ---------- 右键菜单（分类 / 标签：新建 · 改名 · 删除） ----------
+ * 位置由 JS 算好写进 left/top，所以这里只负责长相。
+ * z-index 取 240：要压过弹窗(100)，但不能盖住提示条(200) —— 
+ * 不过菜单在点动作的瞬间就关了，两者其实不会同时出现。 */
+.ctx-menu {
+  position: fixed;
+  z-index: 240;
+  min-width: 130px;
+  padding: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow-hover);
+}
+
+.ctx-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ctx-item:hover {
+  background: var(--chip-bg);
+}
+
+.ctx-item.danger {
+  color: var(--danger);
+}
+
+.ctx-item.danger:hover {
+  background: var(--danger-soft);
+}
+
+.ctx-sep {
+  height: 1px;
+  margin: 4px 2px;
+  background: var(--line);
 }
 
 [hidden] {

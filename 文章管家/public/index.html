@@ -50,9 +50,6 @@
         <div class="drawer-search">
           <input type="search" id="drawerSearch" placeholder="搜索标签" autocomplete="off" />
         </div>
-        <div class="drawer-new">
-          <button class="btn tiny" id="btnNewTerm" type="button">＋ 新建</button>
-        </div>
         <div class="drawer-list" id="drawerList"></div>
       </section>
 
@@ -259,6 +256,8 @@
     </div>
 
     <div class="toast" id="toast"></div>
+    <!-- 分类 / 标签的右键菜单：新建、改名、删除都在这里，抽屉里不再放小按钮 -->
+    <div class="ctx-menu" id="ctxMenu" hidden></div>
     <script src="/app.js"></script>
   </body>
 </html>

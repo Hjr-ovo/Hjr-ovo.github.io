@@ -471,12 +471,7 @@ function openDrawer(kind) {
   $('drawerSearch').value = '';
   $('drawerSearch').placeholder = kind === 'trash' ? '搜索回收箱' : `搜索${KIND_CN[kind]}`;
 
-  // 「＋ 新建」只在标签 / 分类抽屉出现，回收箱没有这个概念
-  const newBtn = $('btnNewTerm');
-  if (newBtn) {
-    newBtn.hidden = kind === 'trash';
-    newBtn.textContent = `＋ 新建${KIND_CN[kind] || ''}`;
-  }
+  // 「新建 / 改名 / 删除」全在右键菜单里（回收箱没有这套），这里不用管按钮
   $('drawer').hidden = false;
   $('resizerDrawer').hidden = false;
   // 宽度不用管：applyLayout 里 --drawer-w 取 layout.drawer || layout.side，
@@ -491,6 +486,7 @@ function closeDrawer() {
   state.drawer = null;
   state.selected = null;
   state.drag = null;
+  closeCtx(); // 抽屉都收了，右键菜单别留在屏幕上
   $('drawer').hidden = true;
   $('resizerDrawer').hidden = true;
   renderList();
@@ -511,7 +507,7 @@ function renderDrawer() {
   // 没搜的时候讲怎么拖；搜了以后改成报匹配数，否则用户不知道筛掉了多少
   $('drawerHint').textContent = q
     ? `匹配 ${list.length} / ${all.length} 个${KIND_CN[kind]}`
-    : `把${KIND_CN[kind]}拖到右边的文章上即可添加；也可以把文章拖进这里`;
+    : `把${KIND_CN[kind]}拖到文章上即可添加；右键可新建 / 改名 / 删除`;
 
   if (all.length === 0) {
     box.innerHTML = `<div class="drawer-empty">还没有${KIND_CN[kind]}</div>`;
@@ -525,12 +521,8 @@ function renderDrawer() {
   box.innerHTML = list
     .map((it) => {
       const sel = state.selected && state.selected.kind === kind && state.selected.name === it.name;
-      return `<div class="drawer-item${sel ? ' selected' : ''}" draggable="true" data-kind="${kind}" data-term="${esc(it.name)}" title="拖到文章上，或点一下高亮同类">
+      return `<div class="drawer-item${sel ? ' selected' : ''}" draggable="true" data-kind="${kind}" data-term="${esc(it.name)}" title="拖到文章上，或点一下高亮同类；右键可新建 / 改名 / 删除">
         <i class="mark"></i><span class="name">${esc(it.name)}</span><span class="count">${it.count}</span>
-        <span class="item-actions">
-          <button type="button" class="icon-btn" data-term-act="rename" draggable="false" title="重命名">✎</button>
-          <button type="button" class="icon-btn danger" data-term-act="delete" draggable="false" title="删除">×</button>
-        </span>
       </div>`;
     })
     .join('');
@@ -608,6 +600,84 @@ async function removeTerm(kind, name) {
   } catch (err) {
     toast(err.message, true);
   }
+}
+
+// ---------- 右键菜单：新建 / 改名 / 删除 ----------
+//
+// 2026-11-03 用户要求：抽屉里不放小按钮，改成右键唤出。
+// 菜单只有三种动作，直接拆 DOM 拼，不引组件。
+// 用 fixed + 贴边夹取：抽屉窄，靠屏幕右边 / 底边右键也能完整看到。
+//
+// ctxTarget 记住「右键点的是哪一项」：name 为 null 表示点的是空白区（只能新建）。
+
+let ctxTarget = null;
+
+function closeCtx() {
+  const m = $('ctxMenu');
+  if (!m || m.hidden) return false;
+  m.hidden = true;
+  ctxTarget = null;
+  return true;
+}
+
+function openCtx(x, y, rows) {
+  const m = $('ctxMenu');
+  if (!m) return;
+  m.innerHTML = rows
+    .map((r) =>
+      r.sep
+        ? '<div class="ctx-sep"></div>'
+        : `<button type="button" class="ctx-item${r.danger ? ' danger' : ''}" data-ctx-act="${r.id}">${esc(r.label)}</button>`,
+    )
+    .join('');
+  m.hidden = false;
+  // 先量再夹：内容撑出来的宽高只有在显示后才知道
+  const { width, height } = m.getBoundingClientRect();
+  m.style.left = `${Math.max(8, Math.min(x, window.innerWidth - width - 8))}px`;
+  m.style.top = `${Math.max(8, Math.min(y, window.innerHeight - height - 8))}px`;
+}
+
+function bindCtx() {
+  const list = $('drawerList');
+
+  list.addEventListener('contextmenu', (e) => {
+    const kind = state.drawer;
+    if (!KIND_CN[kind]) return; // 回收箱没有分类 / 标签这套
+    e.preventDefault();
+    const item = e.target.closest('.drawer-item');
+    if (item) {
+      ctxTarget = { kind, name: item.dataset.term };
+      openCtx(e.clientX, e.clientY, [
+        { id: 'rename', label: '重命名' },
+        { id: 'delete', label: '删除', danger: true },
+        { sep: true },
+        { id: 'create', label: `新建${KIND_CN[kind]}` },
+      ]);
+    } else {
+      // 空白处右键：只给「新建」，其它两个没有对象
+      ctxTarget = { kind, name: null };
+      openCtx(e.clientX, e.clientY, [{ id: 'create', label: `新建${KIND_CN[kind]}` }]);
+    }
+  });
+
+  $('ctxMenu').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-ctx-act]');
+    if (!btn || !ctxTarget) return;
+    const { kind, name } = ctxTarget;
+    const act = btn.dataset.ctxAct;
+    closeCtx();
+    if (act === 'create') return createTerm(kind);
+    if (act === 'rename' && name) return renameTerm(kind, name);
+    if (act === 'delete' && name) return removeTerm(kind, name);
+  });
+
+  // 点别处 / 滚动 / 改窗口大小都收起来，免得菜单飘在内容上
+  document.addEventListener('pointerdown', (e) => {
+    if (!e.target.closest('#ctxMenu')) closeCtx();
+  });
+  document.addEventListener('scroll', closeCtx, true);
+  window.addEventListener('resize', closeCtx);
+  window.addEventListener('blur', closeCtx);
 }
 
 // ---------- 回收箱 ----------
@@ -782,11 +852,6 @@ function bindDrag() {
   list.addEventListener('dragstart', (e) => {
     const item = e.target.closest('.drawer-item');
     if (!item) return;
-    // 从「改名 / 删除」按钮上按下时不要开始拖整项
-    if (e.target.closest('.item-actions')) {
-      e.preventDefault();
-      return;
-    }
     state.drag = { type: 'term', kind: item.dataset.kind, name: item.dataset.term };
     e.dataTransfer.effectAllowed = 'copy';
     e.dataTransfer.setData('text/plain', item.dataset.term);
@@ -839,17 +904,8 @@ function bindDrag() {
     await addTerm(slug, item.dataset.kind, item.dataset.term);
   });
 
-  // --- 抽屉项点击：先看是不是点了改名 / 删除，否则才是「高亮同类」 ---
+  // --- 抽屉项点击：高亮同类文章，再点取消 ---
   list.addEventListener('click', (e) => {
-    const act = e.target.closest('[data-term-act]');
-    if (act) {
-      const row = act.closest('.drawer-item');
-      if (!row) return;
-      e.stopPropagation();
-      if (act.dataset.termAct === 'rename') return renameTerm(row.dataset.kind, row.dataset.term);
-      if (act.dataset.termAct === 'delete') return removeTerm(row.dataset.kind, row.dataset.term);
-      return;
-    }
     const item = e.target.closest('.drawer-item');
     if (!item) return;
     const kind = item.dataset.kind;
@@ -1154,11 +1210,6 @@ function bind() {
 
   $('drawerClose').addEventListener('click', closeDrawer);
 
-  // 「＋ 新建」：按钮在抽屉里，按当前抽屉的类型决定建分类还是标签
-  $('btnNewTerm').addEventListener('click', () => {
-    if (state.drawer && KIND_CN[state.drawer]) createTerm(state.drawer);
-  });
-
   $('drawerSearch').addEventListener('input', renderDrawer);
   $('drawerSearch').addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !e.target.value) return;
@@ -1265,10 +1316,12 @@ function bind() {
   bindResizer($('resizerSide'), 'side');
   bindResizer($('resizerDrawer'), 'drawer');
   bindDrag();
+  bindCtx();
   bindTheme();
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if (closeCtx()) return; // 右键菜单开着时，Esc 先收菜单
       if (closeTopModal()) return;
       if (state.drawer) closeDrawer();
       return;
