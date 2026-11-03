@@ -1205,7 +1205,8 @@ textarea.body {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s, transform 0.2s;
-  z-index: 50;
+  /* 必须高于 .modal(100)：保存 / 删除成功后提示在弹窗下方，等于没提示 */
+  z-index: 200;
   max-width: 80vw;
 }
 
@@ -1217,6 +1218,19 @@ textarea.body {
 .toast.bad {
   background: var(--danger);
   color: #fff;
+}
+
+/* 弹窗打开时把提示条挪到顶部：弹窗底部是「关闭 / 保存」那排按钮，
+ * 提示浮在下面会正好盖住它们。挪上去后两者都不挡。
+ * :has() 不受支持时（老浏览器）只是留在底部，z-index 仍保证看得见。 */
+body:has(.modal:not([hidden])) .toast {
+  top: 18px;
+  bottom: auto;
+  transform: translateX(-50%) translateY(-12px);
+}
+
+body:has(.modal:not([hidden])) .toast.show {
+  transform: translateX(-50%) translateY(0);
 }
 
 [hidden] {
