@@ -15,7 +15,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import TableOfContents from '../../components/TableOfContents.astro';
 import { formatDate, isoDate } from '../../utils/format-date';
 import { findRelated } from '../../utils/related-posts';
-import { countWords, formatWords } from '../../utils/word-count';
+import { countWords, formatWords, withWordCount } from '../../utils/word-count';
 
 export async function getStaticPaths() {
   const posts = await getCollection('posts', ({ data }) => !data.draft);
@@ -45,7 +45,8 @@ const latest = allPosts
   .filter((item) => item.id !== post.id)
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
   .slice(0, 3);
-const more = related.length > 0 ? related : latest;
+// 横条卡片也会显示字数，同样在这里补字段
+const more = withWordCount(related.length > 0 ? related : latest);
 const moreTitle = related.length > 0 ? '相关文章' : '继续阅读';
 ---
 
@@ -103,7 +104,7 @@ const moreTitle = related.length > 0 ? '相关文章' : '继续阅读';
             <li>
               <a href={`/posts/${item.id}/`}>{item.data.title}</a>
               <p class="related-meta">
-                {formatDate(item.data.pubDate)}{item.data.categories.length > 0 && ` · ${item.data.categories.join(' · ')}`}
+                {formatDate(item.data.pubDate)}{item.data.categories.length > 0 && ` · ${item.data.categories.join(' · ')}`}{item.wordLabel && ` · ${item.wordLabel}`}
               </p>
               <span class="related-arrow" aria-hidden="true">→</span>
             </li>

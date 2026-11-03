@@ -11,6 +11,7 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { formatDate, isoDate } from '../../utils/format-date';
+import { withWordCount } from '../../utils/word-count';
 
 export async function getStaticPaths() {
   const posts = await getCollection('posts', ({ data }) => !data.draft);
@@ -29,8 +30,9 @@ export async function getStaticPaths() {
     params: { category },
     props: {
       // 同一个分类内按发布日期倒序，与首页口径一致
-      posts: list.sort(
-        (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+      // withWordCount 补字数，卡片里的日期行直接用
+      posts: withWordCount(
+        list.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()),
       ),
     },
   }));
@@ -67,6 +69,7 @@ const category = Astro.params.category;
               </time>
             </>
           )}
+          {post.wordLabel && ` · ${post.wordLabel}`}
         </p>
 
         <p class="post-desc">{post.data.description}</p>

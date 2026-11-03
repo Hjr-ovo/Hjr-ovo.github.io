@@ -1165,6 +1165,11 @@ article img {
       'meta arrow';
     row-gap: 0.15rem;
   }
+
+  /* 窄屏这行要同时装「日期 · 分类 · 字数」，nowrap 会顶出卡片，允许折行 */
+  .related-meta {
+    white-space: normal;
+  }
 }
 
 /* ---------- 关于页 ----------
@@ -1561,6 +1566,16 @@ article img {
   font-variant-numeric: tabular-nums;
 }
 
+/* 字数：比日期再淡一档。给固定最小宽度是因为各篇长度差一个数量级
+   （200 字 vs 3,400 字），不定期宽度的话每行标题的左端会参差。 */
+.archive-words {
+  flex: 0 0 auto;
+  min-width: 4.8em;
+  font-size: 0.78rem;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
 .archive-link {
   flex: 1 1 auto;
   /* ⚠️ 必须给 min-width:0：flex 项默认 min-width:auto，长标题不肯收缩，
@@ -1769,6 +1784,12 @@ article img {
   margin: 0.35rem 0 0;
   color: var(--muted);
   font-size: 0.95rem;
+}
+
+/* 搜索结果卡片里的「日期 · 字数」行。首页卡片的 .post-meta 上下留得比较宽，
+   这里是结果清单，一行信息要挨紧一点，否则每条结果都虚胖一圈。 */
+#search-results .post-meta {
+  margin: 0.1rem 0 0.5rem;
 }
 
 .search-excerpt mark {

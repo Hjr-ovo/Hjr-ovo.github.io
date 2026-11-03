@@ -18,9 +18,12 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { isoDate } from '../../utils/format-date';
+import { withWordCount } from '../../utils/word-count';
 
-const posts = (await getCollection('posts', ({ data }) => !data.draft)).sort(
-  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+const posts = withWordCount(
+  (await getCollection('posts', ({ data }) => !data.draft)).sort(
+    (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+  ),
 );
 
 // 条目行只需要月-日：月份已经写在上面的节点标签里，再重复一遍是噪音
@@ -66,6 +69,11 @@ for (const post of posts) {
                 <time class="archive-date" datetime={isoDate(post.data.pubDate)}>
                   {monthDay(post.data.pubDate)}
                 </time>
+                {/* 字数紧跟在日期后面：一行里「什么时候发的、多长」读起来是连贯的。
+                    放最右侧会被标签组挤走，放标题后面又会把标题戳断。 */}
+                {post.wordLabel && (
+                  <span class="archive-words">{post.wordLabel}</span>
+                )}
                 <a class="archive-link" href={`/posts/${post.id}/`}>
                   {post.data.title}
                 </a>

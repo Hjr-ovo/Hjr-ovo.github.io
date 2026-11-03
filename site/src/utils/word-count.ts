@@ -63,3 +63,25 @@ export function countWords(markdown: string): number {
 export function formatWords(count: number): string {
   return new Intl.NumberFormat('zh-CN').format(count);
 }
+
+/**
+ * 给一批文章条目补上两个字段，供列表 / 卡片直接渲染：
+ *   words     —— 原始数字，需要排序或参与计算时用
+ *   wordLabel —— 拼好的「195 字」，正文为空时是空串（模板里当 falsy 用）
+ *
+ * 为什么把格式化也放进这个函数：卡片有六处（首页、归档、分类、标签、
+ * 相关文章、搜索），每处都写一遍 `countWords(...) > 0 ? ...` 迟早写岔，
+ * 只在 build 时算一次，随条目一起传下去最省事。
+ */
+export function withWordCount<T extends { body?: string }>(
+  entries: T[],
+): (T & { words: number; wordLabel: string })[] {
+  return entries.map((entry) => {
+    const words = countWords(entry.body ?? '');
+    return {
+      ...entry,
+      words,
+      wordLabel: words > 0 ? `${formatWords(words)} 字` : '',
+    };
+  });
+}

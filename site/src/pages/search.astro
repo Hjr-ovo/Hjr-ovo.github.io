@@ -18,10 +18,14 @@
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { formatDate } from '../utils/format-date';
+import { withWordCount } from '../utils/word-count';
 
-const posts = await getCollection('posts', ({ data }) => !data.draft);
+const posts = withWordCount(
+  await getCollection('posts', ({ data }) => !data.draft),
+);
 
 // 轻量索引：只放搜索要用的字段，不带正文（正文有 PageFind）
+// words 是拼好的「195 字」，搜索结果卡片和首页卡片显示同一套信息
 const postIndex = posts.map((post) => ({
   url: `/posts/${post.id}/`,
   title: post.data.title,
@@ -29,6 +33,7 @@ const postIndex = posts.map((post) => ({
   tags: post.data.tags ?? [],
   categories: post.data.categories ?? [],
   date: formatDate(post.data.pubDate),
+  words: post.wordLabel,
 }));
 ---
 
@@ -95,6 +100,7 @@ const postIndex = posts.map((post) => ({
     tags: string[];
     categories: string[];
     date: string;
+    words: string;
   };
 
   type Hit = PostMeta & {
@@ -244,6 +250,17 @@ const postIndex = posts.map((post) => ({
       }
 
       li.appendChild(h2);
+
+      // 日期 + 字数：和首页卡片同一套信息、同一种淡色小字。
+      // 拼成一行、缺一个就只显示另一个（正文命中时靠 url 回查索引补齐）
+      const metaText = [hit.date, hit.words].filter(Boolean).join(' · ');
+      if (metaText) {
+        const metaEl = document.createElement('p');
+        metaEl.className = 'post-meta';
+        metaEl.textContent = metaText;
+        li.appendChild(metaEl);
+      }
+
       li.appendChild(p);
 
       if (hit.categories.length || hit.tags.length) {
@@ -363,6 +380,7 @@ const postIndex = posts.map((post) => ({
               tags: meta?.tags ?? [],
               categories: meta?.categories ?? [],
               date: meta?.date ?? '',
+              words: meta?.words ?? '',
               excerpt: item.excerpt,
             },
             'body',

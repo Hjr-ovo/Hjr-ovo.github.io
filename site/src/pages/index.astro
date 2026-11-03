@@ -5,7 +5,7 @@
 //   1. 取出所有「不是草稿」的文章
 //   2. 按发布日期倒序排列（最新的在最上面）
 //   3. 只渲染前 10 篇，其余的去 /posts/ 归档页看
-//   4. 逐条渲染标题、日期、摘要、分类、标签
+//   4. 逐条渲染标题、日期、字数、摘要、分类、标签
 //
 // 注意：Astro 取出来的集合**顺序是不确定的**，必须自己排。
 // 不排的话每次构建出来的顺序可能都不一样。
@@ -14,12 +14,16 @@ import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { SITE } from '../consts';
 import { formatDate, isoDate } from '../utils/format-date';
+import { withWordCount } from '../utils/word-count';
 
 // 首页放几篇。想改就改这个数字，下面的按钮和提示文字会自己跟着变
 const RECENT_COUNT = 10;
 
-const posts = (await getCollection('posts', ({ data }) => !data.draft)).sort(
-  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+// withWordCount 顺手补上 words / wordLabel 两个字段，卡片里直接用
+const posts = withWordCount(
+  (await getCollection('posts', ({ data }) => !data.draft)).sort(
+    (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+  ),
 );
 
 const recentPosts = posts.slice(0, RECENT_COUNT);
@@ -62,6 +66,9 @@ const restCount = posts.length - recentPosts.length;
                 </time>
               </>
             )}
+            {/* 字数和日期同一行：都属于「这篇有多长 / 多新」的规模信息。
+                口径见 utils/word-count.ts（不含代码），0 字就不显示 */}
+            {post.wordLabel && ` · ${post.wordLabel}`}
           </p>
 
           {/* 摘要放在日期下面，是因为它比日期长得多，
