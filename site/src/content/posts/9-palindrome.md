@@ -1,7 +1,7 @@
 ---
 title: 9-回文数
 description: 这篇文章为leetcode第9题回文数的解答。
-pubDate: 2026-11-03
+pubDate: 2026-11-02
 categories: [leetcode解答]
 tags: [leetcode]
 draft: false
