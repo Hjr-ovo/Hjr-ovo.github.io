@@ -100,7 +100,6 @@
       <div class="modal-card wide">
         <header class="modal-head">
           <strong>入库文章</strong>
-          <span class="modal-sub">拖一批 .md 进来，逐篇看诊断、改详情，再一起写</span>
           <span class="grow"></span>
           <button class="btn ghost tiny" data-close="ingest" title="关闭（Esc）">×</button>
         </header>
@@ -108,7 +107,6 @@
         <div class="modal-body">
           <div class="drop" id="drop">
             <strong id="dropTitle">把 .md 文件拖到这里（可以一次拖多篇）</strong>
-            <span id="dropSub">或者点一下选文件，能多选。只读不写，先告诉你会发生什么。</span>
             <input type="file" id="fileInput" accept=".md,.markdown,text/markdown" multiple hidden />
           </div>
 
@@ -121,7 +119,6 @@
                   <button class="btn ghost tiny" id="btnClearBatch" title="清空队列">清空</button>
                 </div>
                 <div class="batch-list" id="batchList"></div>
-                <div class="batch-tip">点某一篇，右边改它的标题 / 摘要 / 日期 / 分类 / 标签。</div>
               </aside>
 
               <!-- 右：选中那一篇的详情 -->
