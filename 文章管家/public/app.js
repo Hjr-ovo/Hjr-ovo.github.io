@@ -361,9 +361,7 @@ async function loadStatus() {
     const s = await api('/api/status');
     $('devDot').className = 'dot ' + (s.dev ? 'on' : 'off');
     $('devText').textContent = s.dev ? '站点运行中' : '站点未运行';
-    $('devText').parentElement.title = s.dev
-      ? '本地预览已开着，点「打开」可直接看效果'
-      : '双击根目录的 预览.bat 启动站点';
+    $('devText').parentElement.title = s.dev ? s.blogUrl || '' : '';
     // 整串路径太长会在侧栏折成两行，只显示末两段，完整路径放 title
     const parts = String(s.postsDir || '').split(/[\\/]/);
     $('dirHint').textContent = parts.slice(-2).join('/');
@@ -504,12 +502,10 @@ function renderDrawer() {
   const q = raw.toLowerCase();
   const list = q ? all.filter((it) => it.name.toLowerCase().includes(q)) : all;
 
-  // 没搜的时候讲怎么拖；搜了以后改成报匹配数，否则用户不知道筛掉了多少
+  // 只在搜索时报匹配数；平时留空 —— 界面上不写「怎么用」的说明，靠控件自己说
   $('drawerHint').textContent = q
     ? `匹配 ${list.length} / ${all.length} 个${KIND_CN[kind]}`
-    : kind === 'categories'
-      ? '拖到文章上即可添加；右键可编辑简介 / 改名 / 删除'
-      : `把${KIND_CN[kind]}拖到文章上即可添加；右键可新建 / 改名 / 删除`;
+    : '';
 
   if (all.length === 0) {
     box.innerHTML = `<div class="drawer-empty">还没有${KIND_CN[kind]}</div>`;
@@ -527,7 +523,7 @@ function renderDrawer() {
       const sel = state.selected && state.selected.kind === kind && state.selected.name === it.name;
       // 有简介的分类把简介挂进 title：抽屉很窄，不适合再塞一行字
       const desc = kind === 'categories' ? descs[it.name] : '';
-      const tip = `拖到文章上，或点一下高亮同类；右键可操作${desc ? `\n简介：${desc}` : ''}`;
+      const tip = desc || '';
       return `<div class="drawer-item${sel ? ' selected' : ''}" draggable="true" data-kind="${kind}" data-term="${esc(it.name)}" title="${esc(tip)}">
         <i class="mark"></i><span class="name">${esc(it.name)}</span><span class="count">${it.count}</span>
       </div>`;
@@ -541,7 +537,7 @@ function renderDrawer() {
 // 分类 / 标签没有独立数据：改名和删除会扫全部文章，把引用一起改掉。
 
 async function createTerm(kind) {
-  const name = prompt(`新建${KIND_CN[kind]}：\n起个名字就好，之后把文章拖进来即可。`);
+  const name = prompt(`新建${KIND_CN[kind]}：`);
   if (name === null) return;
   const term = name.trim();
   if (!term) return;
@@ -619,12 +615,7 @@ async function removeTerm(kind, name) {
 
 async function editCategoryDesc(name) {
   const cur = (state.meta && state.meta.descs && state.meta.descs[name]) || '';
-  const text = prompt(
-    `给分类「${name}」写一句简介：\n\n` +
-      '· 会显示在「分类」列表的卡片上，以及该分类页标题下面\n' +
-      '· 一句话就够，留空表示不要简介',
-    cur,
-  );
+  const text = prompt(`分类「${name}」的简介（留空即不要）：`, cur);
   if (text === null) return;
 
   try {
@@ -757,7 +748,7 @@ function renderTrash() {
 
   $('drawerHint').textContent = q
     ? `匹配 ${list.length} / ${all.length} 篇回收箱里的文章`
-    : '这里的文章在博客上已经看不到。恢复就点「恢复」，彻底删除会丢进电脑的回收站';
+    : '';
 
   if (all.length === 0) {
     box.innerHTML = '<div class="drawer-empty">回收箱是空的</div>';
@@ -1224,9 +1215,7 @@ function fillBatchForm(item) {
     .map((t) => `<span class="chip click" data-title="${esc(t.value)}">${esc(t.label)}</span>`)
     .join('');
 
-  $('descHint').textContent = p.descFromFile
-    ? '来自原文，可以改'
-    : '原文没写摘要 —— 自动截取了正文第一段，可以直接改';
+  $('descHint').textContent = p.descFromFile ? '来自原文' : '原文未写，已取正文首段';
 
   updateSlugPreview();
   $('bodyPreview').textContent = String(p.body || '').split('\n').slice(0, 40).join('\n');

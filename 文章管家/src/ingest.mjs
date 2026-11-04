@@ -128,7 +128,7 @@ export async function analyze(raw, ctx = {}) {
   const checks = [];
   const add = (level, text) => checks.push({ level, text });
 
-  if (raw.startsWith('\uFEFF')) add('info', '文件带 UTF-8 BOM，写入时会去掉（BOM 会让 YAML 解析诡异失败）');
+  if (raw.startsWith('\uFEFF')) add('info', '文件带 UTF-8 BOM，写入时会去掉');
 
   // 宽松切分：没有 frontmatter 也能继续，全文当正文
   const doc = splitDocumentLoose(raw);
@@ -158,7 +158,7 @@ export async function analyze(raw, ctx = {}) {
 
   // frontmatter 里有别的标题时，只提示、不擅自采用（用户要的是文件名）
   if (fmTitle && fileBase && fmTitle !== fileBase) {
-    add('info', `frontmatter 里还写着一个标题「${fmTitle}」，要换成它点右边的候选`);
+    add('info', `frontmatter 里还写着一个标题「${fmTitle}」`);
   }
 
   // ---- 摘要：没有就截正文第一段 ----
@@ -166,8 +166,8 @@ export async function analyze(raw, ctx = {}) {
   const firstPara = firstParagraph(body);
   const description = descFromFile || clip(firstPara);
   if (descFromFile) add('info', '摘要来自 frontmatter 的 ' + (data.description ? 'description' : data.explain ? 'explain' : 'summary'));
-  else if (description) add('info', `没有摘要，自动截取正文第一段：「${clip(description, 30)}」。不满意可以直接改`);
-  else add('warn', '没有摘要，正文第一段也取不到 —— 请手写一句（会显示在列表和搜索结果里）');
+  else if (description) add('info', `没有摘要，自动截取正文第一段：「${clip(description, 30)}」`);
+  else add('warn', '没有摘要，正文首段也取不到 —— 需要手填');
 
   // ---- 日期：没有就用今天 ----
   const dateRaw = pick(data, 'pubDate');
@@ -229,7 +229,7 @@ export async function analyze(raw, ctx = {}) {
   const existing = new Set(ctx.existingCategories || []);
   const fresh = cats.filter((c) => !existing.has(c));
   if (cats.length === 0) {
-    add('info', '没有分类 —— 分类是可选的，空着就不出现在任何分类页，以后随时能加');
+    add('info', '没有分类');
   } else if (fresh.length > 0) {
     add('info', `分类「${fresh.join('、')}」是新的，会新建对应的分类页`);
   }
@@ -237,7 +237,7 @@ export async function analyze(raw, ctx = {}) {
   // ---- 文件名：自动生成 + 重名自动加序号 ----
   const seed = slugify(fileBase || title);
   const slug = await uniqueSlug(seed);
-  if (slug !== seed) add('warn', `站里已经有「${seed}」了，文件名自动改成「${slug}」（想换可以手改）`);
+  if (slug !== seed) add('warn', `站里已经有「${seed}」了，文件名自动改成「${slug}」`);
   if (!fileBase && !title) add('error', '没有可用的名字，文件名只能手填');
 
   // 其他可选名字：frontmatter 的 slug、另一个标题、按日期兜底

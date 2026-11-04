@@ -46,7 +46,7 @@
           <span id="drawerTitle">标签</span>
           <button class="btn ghost tiny" id="drawerClose" title="收起（Esc）">×</button>
         </div>
-        <div class="drawer-hint" id="drawerHint">把左边的项拖到文章上，或把文章拖进这里</div>
+        <div class="drawer-hint" id="drawerHint"></div>
         <div class="drawer-search">
           <input type="search" id="drawerSearch" placeholder="搜索标签" autocomplete="off" />
         </div>
@@ -106,7 +106,7 @@
 
         <div class="modal-body">
           <div class="drop" id="drop">
-            <strong id="dropTitle">把 .md 文件拖到这里（可以一次拖多篇）</strong>
+            <strong id="dropTitle">把 .md 拖到这里</strong>
             <input type="file" id="fileInput" accept=".md,.markdown,text/markdown" multiple hidden />
           </div>
 
@@ -123,23 +123,20 @@
 
               <!-- 右：选中那一篇的详情 -->
               <div class="batch-main">
-                <div class="batch-empty" id="batchEmpty">左边点一篇，这里看它的详情</div>
+                <div class="batch-empty" id="batchEmpty"></div>
 
                 <div id="batchDetail" hidden>
                   <div class="two-col">
                     <div class="panel">
-                      <h2>诊断：这篇会发生什么</h2>
+                      <h2>诊断</h2>
                       <div class="checks" id="checks"></div>
-                      <div class="hint" style="font-size: 12px; color: var(--muted); margin-top: 12px">
-                        诊断只是预测，真实结果以站点渲染为准。到这里还没有写任何文件。
-                      </div>
                     </div>
 
                     <div class="panel">
                       <h2>起名与归类</h2>
 
                       <div class="field">
-                        <label for="gSlug">文件名（= URL，自动生成，重复会自动加序号）</label>
+                        <label for="gSlug">文件名</label>
                         <input type="text" id="gSlug" spellcheck="false" />
                         <div class="hint" id="slugPreview">/posts/…/</div>
                         <div class="picker" id="pickSlug"></div>
@@ -152,7 +149,7 @@
                       </div>
 
                       <div class="field">
-                        <label for="gDesc">摘要（会显示在列表和搜索结果里）</label>
+                        <label for="gDesc">摘要</label>
                         <textarea id="gDesc" rows="3"></textarea>
                         <div class="hint" id="descHint"></div>
                       </div>
@@ -163,14 +160,14 @@
                           <input type="date" id="gDate" />
                         </div>
                         <div class="field">
-                          <label>分类（可空，可多个）</label>
+                          <label>分类</label>
                           <div class="terms" id="gCats" data-kind="categories" data-placeholder="输入可搜索，回车新建"></div>
                         </div>
                       </div>
 
                       <div class="field">
-                        <label>标签（可空，可多个）</label>
-                        <div class="terms" id="gTags" data-kind="tags" data-placeholder="输入可搜索，回车新建"></div>
+                    <label>标签</label>
+                    <div class="terms" id="gTags" data-kind="tags" data-placeholder="输入可搜索，回车新建"></div>
                       </div>
 
                       <div class="field">
@@ -183,7 +180,7 @@
                   </div>
 
                   <div class="panel" style="margin-top: 18px">
-                    <h2>正文预览（前 40 行，只读）</h2>
+                    <h2>正文预览</h2>
                     <div class="preview" id="bodyPreview"></div>
                   </div>
                 </div>
@@ -226,7 +223,7 @@
               </div>
 
               <div class="field">
-                <label for="fDesc">摘要（会显示在列表和搜索结果里，必填）</label>
+                <label for="fDesc">摘要 *</label>
                 <textarea id="fDesc" rows="3"></textarea>
               </div>
 
@@ -236,33 +233,32 @@
                   <input type="date" id="fDate" />
                 </div>
                 <div class="field">
-                  <label for="fUpdated">更新日期（不填就不显示）</label>
+                  <label for="fUpdated">更新日期</label>
                   <input type="date" id="fUpdated" />
                 </div>
               </div>
 
               <div class="field">
-                <label>分类（可空，可多个，输入可搜索）</label>
+                <label>分类</label>
                 <div class="terms" id="fCats" data-kind="categories" data-placeholder="输入可搜索，回车新建"></div>
               </div>
 
               <div class="field">
-                <label>标签（可空，可多个，输入可搜索）</label>
+                <label>标签</label>
                 <div class="terms" id="fTags" data-kind="tags" data-placeholder="输入可搜索，回车新建"></div>
               </div>
 
               <div class="field">
                 <label class="switch">
                   <input type="checkbox" id="fDraft" />
-                  <span>存为草稿（不生成页面、不进列表）</span>
+                  <span>存为草稿</span>
                 </label>
               </div>
             </div>
 
             <div class="panel body-panel">
-              <h2>正文（Markdown，一个字都不会被工具改动）</h2>
+              <h2>正文</h2>
               <textarea class="body" id="fBody" spellcheck="false"></textarea>
-              <div class="hint">改正文建议还是回 Obsidian 改；这里适合修错别字。</div>
             </div>
           </div>
         </div>

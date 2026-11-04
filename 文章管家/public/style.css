@@ -234,6 +234,13 @@ body.resizing {
   line-height: 1.5;
 }
 
+/* 这两处平时是空的（只有搜索时报匹配数、未选中时占位），
+   空的时候别留出一截空白 —— 界面上也不写操作说明。 */
+.drawer-hint:empty,
+.batch-empty:empty {
+  display: none;
+}
+
 .drawer-search {
   padding: 0 8px 8px;
 }
