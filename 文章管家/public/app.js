@@ -15,8 +15,8 @@ const state = {
   meta: null, // 分类 / 标签候选
   current: null, // 正在编辑的那篇（含 hash，用于冲突检测）
   dirty: false,
-  plan: null, // 入库诊断结果
-  raw: '', // 入库文件原文
+  batch: [], // 入库队列：[{ id, filename, raw, plan, form, status, error }]
+  batchSel: null, // 队列里选中的那一篇的 id
   drawer: null, // null | 'tags' | 'categories' | 'trash'
   selected: null, // { kind, name } 抽屉里点中的那一项
   drag: null, // { type:'term'|'post', ... } 当前正在拖的东西
@@ -988,7 +988,10 @@ function closeTopModal() {
   if (open.length === 0) return false;
   const name = open[open.length - 1].id === 'modalEdit' ? 'edit' : 'ingest';
   if (name === 'edit' && state.dirty && !confirm('有未保存的改动，确定关闭吗？')) return true;
-  if (name === 'ingest') resetIngest();
+  if (name === 'ingest') {
+    if (!confirmLeaveIngest()) return true;
+    resetIngest();
+  }
   closeModal(name);
   return true;
 }
@@ -1094,7 +1097,16 @@ async function refreshMeta() {
   }
 }
 
-// ---------- 入库 ----------
+// ---------- 入库（批量） ----------
+//
+// 2026-11-04 起一次可以拖多篇。三件事要照顾到：
+//   1. 队列和详情分开：左边挑一篇、右边改它的标题摘要分类标签，切走再切回来不丢
+//   2. 分析串行（一篇一篇来）：队列里能看见「分析中」逐个变成「待写入」
+//   3. 写入走 /api/ingest-batch，服务端逐篇写 —— 一篇不合格不影响其余
+//
+// 队列项状态：analyzing（分析中）→ ready（待写入）→ done（已写入）／ error（没成功）
+
+let batchSeq = 0;
 
 function renderChecks(checks) {
   const markOf = { error: '错误', warn: '注意', info: '说明', ok: '正常' };
@@ -1103,57 +1115,230 @@ function renderChecks(checks) {
     .join('');
 }
 
-async function handleFile(file) {
-  if (!file) return;
-  if (!/\.(md|markdown)$/i.test(file.name)) {
+function batchItem(id) {
+  return state.batch.find((x) => x.id === id) || null;
+}
+
+function currentBatchItem() {
+  return batchItem(state.batchSel);
+}
+
+/** 本批里出现两次以上的文件名。写的时候服务端会自动加 -2，队列里先提醒一句 */
+function batchDupes() {
+  const count = new Map();
+  for (const it of state.batch) {
+    if (it.status !== 'ready' || !it.form.slug) continue;
+    count.set(it.form.slug, (count.get(it.form.slug) || 0) + 1);
+  }
+  return new Set([...count].filter(([, n]) => n > 1).map(([s]) => s));
+}
+
+function renderBatch() {
+  const dupes = batchDupes();
+  $('batchList').innerHTML = state.batch
+    .map((it) => {
+      const title = it.form.title || it.filename;
+      let sub;
+      if (it.status === 'done') sub = `已写入 /posts/${esc(it.form.slug)}/`;
+      else if (it.status === 'error') sub = esc(it.error || '没成功');
+      else if (it.status === 'analyzing') sub = '正在分析…';
+      else sub = `${esc(it.form.slug || '还没起名')} · ${it.form.desc ? '有摘要' : '缺摘要'}`;
+      const dupe = dupes.has(it.form.slug) ? ' <span class="bi-warn">同批重名，写时加序号</span>' : '';
+      return `<div class="batch-item ${it.id === state.batchSel ? 'active' : ''} ${it.status}" data-batch-item="${it.id}">
+        <span class="bi-dot"></span>
+        <div class="bi-text">
+          <div class="bi-title">${esc(title)}</div>
+          <div class="bi-sub">${sub}${dupe}</div>
+        </div>
+        <button class="bi-x" data-batch-remove="${it.id}" title="从队列移除">×</button>
+      </div>`;
+    })
+    .join('');
+  $('batchCount').textContent = String(state.batch.length);
+  updateIngestButtons();
+}
+
+function updateIngestButtons() {
+  const ready = state.batch.filter((x) => x.status === 'ready');
+  const cur = currentBatchItem();
+
+  $('btnIngest').disabled = ready.length === 0;
+  $('btnIngest').textContent = ready.length > 1 ? `写入全部（${ready.length} 篇）` : '写入站点';
+  $('btnIngestOne').disabled = !(cur && cur.status === 'ready');
+
+  const analyzing = state.batch.filter((x) => x.status === 'analyzing').length;
+  const done = state.batch.filter((x) => x.status === 'done').length;
+  const bad = state.batch.filter((x) => x.status === 'error').length;
+
+  const parts = [];
+  if (state.batch.length === 0) parts.push('还没有文件');
+  else {
+    parts.push(`队列 ${state.batch.length} 篇`);
+    if (analyzing) parts.push(`分析中 ${analyzing}`);
+    parts.push(`待写 ${ready.length}`);
+    if (done) parts.push(`已写 ${done}`);
+    if (bad) parts.push(`有问题 ${bad}`);
+  }
+  const el = $('ingestState');
+  el.textContent = parts.join(' · ');
+  el.className = 'state' + (bad ? ' dirty' : '');
+}
+
+/** 把表单当前值写回选中那一篇（切走、写入前都要先做这一步） */
+function flushBatchForm() {
+  const item = currentBatchItem();
+  if (!item || !item.plan || item.status === 'done') return;
+  item.form = {
+    slug: $('gSlug').value.trim(),
+    title: $('gTitle').value,
+    desc: $('gDesc').value,
+    date: $('gDate').value,
+    cats: TERMS.gCats.get(),
+    tags: TERMS.gTags.get(),
+    draft: $('gDraft').checked,
+  };
+}
+
+/** 把某一篇的值铺到右边表单上 */
+function fillBatchForm(item) {
+  $('batchEmpty').hidden = true;
+  $('batchDetail').hidden = false;
+
+  const p = item.plan || {};
+  const f = item.form;
+  renderChecks(p.checks || []);
+
+  $('gSlug').value = f.slug || '';
+  $('gTitle').value = f.title || '';
+  $('gDesc').value = f.desc || '';
+  $('gDate').value = f.date || '';
+  TERMS.gCats.set(f.cats || []);
+  TERMS.gTags.set(f.tags || []);
+  $('gDraft').checked = f.draft === true;
+
+  $('pickSlug').innerHTML = (p.slugCandidates || [])
+    .map((s) => `<span class="chip click" data-slug="${esc(s)}">${esc(s)}</span>`)
+    .join('');
+
+  $('pickTitle').innerHTML = (p.altTitles || [])
+    .map((t) => `<span class="chip click" data-title="${esc(t.value)}">${esc(t.label)}</span>`)
+    .join('');
+
+  $('descHint').textContent = p.descFromFile
+    ? '来自原文，可以改'
+    : '原文没写摘要 —— 自动截取了正文第一段，可以直接改';
+
+  updateSlugPreview();
+  $('bodyPreview').textContent = String(p.body || '').split('\n').slice(0, 40).join('\n');
+
+  // 已写入的那篇锁成只读：这里再改也写不进文件，不如直接拦住，别让人白改一场
+  $('batchDetail').classList.toggle('locked', item.status === 'done');
+}
+
+function selectBatch(id) {
+  if (state.batchSel === id) return;
+  flushBatchForm();
+  state.batchSel = id;
+
+  const item = batchItem(id);
+  if (item && item.plan) fillBatchForm(item);
+  else {
+    $('batchDetail').hidden = true;
+    $('batchEmpty').hidden = false;
+  }
+  renderBatch();
+}
+
+function removeBatchItem(id) {
+  const idx = state.batch.findIndex((x) => x.id === id);
+  if (idx < 0) return;
+
+  state.batch.splice(idx, 1);
+  if (state.batchSel === id) {
+    state.batchSel = null;
+    const next = state.batch[Math.min(idx, state.batch.length - 1)];
+    if (next) selectBatch(next.id);
+    else {
+      $('batchDetail').hidden = true;
+      $('batchEmpty').hidden = false;
+    }
+  }
+  if (state.batch.length === 0) resetIngest();
+  else {
+    renderBatch();
+    updateIngestButtons();
+  }
+}
+
+/** 拖进来 / 选中一批文件：先全部入队，再一篇一篇分析 */
+async function handleFiles(fileList) {
+  const all = [...fileList];
+  const files = all.filter((f) => /\.(md|markdown)$/i.test(f.name));
+  if (files.length === 0) {
     toast('只认 .md / .markdown 文件', true);
     return;
   }
-  const raw = await file.text();
-  state.raw = raw;
+  if (files.length < all.length) toast(`跳过 ${all.length - files.length} 个不是 .md 的文件`);
 
-  try {
-    const plan = await api('/api/analyze', {
-      method: 'POST',
-      body: JSON.stringify({ raw, filename: file.name }),
-    });
-    state.plan = plan;
+  const added = [];
+  for (const file of files) {
+    const item = {
+      id: ++batchSeq,
+      filename: file.name,
+      raw: await file.text(),
+      plan: null,
+      // 分析还没回来时先用文件名占位，队列里不至于是一片空白
+      form: {
+        slug: '',
+        title: file.name.replace(/\.(md|markdown)$/i, ''),
+        desc: '',
+        date: '',
+        cats: [],
+        tags: [],
+        draft: false,
+      },
+      status: 'analyzing',
+      error: '',
+      result: null,
+    };
+    state.batch.push(item);
+    added.push(item);
+  }
 
-    $('ingestBody').hidden = false;
-    renderChecks(plan.checks);
+  $('ingestBody').hidden = false;
+  $('drop').classList.add('compact');
+  selectBatch(added[0].id);
+  renderBatch();
 
-    if (!plan.meta) {
-      $('btnIngest').disabled = true;
-      return;
+  // 串行分析：一篇一篇来，队列里能看见进度，也不会一次糊十个请求给本地服务
+  for (const item of added) {
+    try {
+      const plan = await api('/api/analyze', {
+        method: 'POST',
+        body: JSON.stringify({ raw: item.raw, filename: item.filename }),
+      });
+      item.plan = plan;
+      item.form = {
+        slug: plan.slug || (plan.slugCandidates || [])[0] || '',
+        title: plan.meta ? plan.meta.title || '' : item.form.title,
+        desc: plan.meta ? plan.meta.description || '' : '',
+        date: plan.meta ? plan.meta.pubDate || '' : '',
+        cats: plan.meta ? plan.meta.categories || [] : [],
+        tags: plan.meta ? plan.meta.tags || [] : [],
+        draft: plan.meta ? plan.meta.draft === true : false,
+      };
+      if (!plan.meta) {
+        item.status = 'error';
+        item.error = '没有可用的标题 —— 文件名和 frontmatter 里都没有';
+      } else {
+        item.status = 'ready';
+      }
+    } catch (err) {
+      item.status = 'error';
+      item.error = err.message;
     }
-    $('btnIngest').disabled = false;
-
-    // 文件名和标题都是自动的，用户不用改；重复了服务端会自动加 -2
-    $('gSlug').value = plan.slug || plan.slugCandidates[0] || '';
-    $('gTitle').value = plan.meta.title || '';
-    $('gDesc').value = plan.meta.description || '';
-    $('gDate').value = plan.meta.pubDate || '';
-    TERMS.gCats.set(plan.meta.categories);
-    TERMS.gTags.set(plan.meta.tags);
-    $('gDraft').checked = plan.meta.draft === true;
-
-    $('pickSlug').innerHTML = plan.slugCandidates
-      .map((s) => `<span class="chip click" data-slug="${esc(s)}">${esc(s)}</span>`)
-      .join('');
-
-    $('pickTitle').innerHTML = (plan.altTitles || [])
-      .map((t) => `<span class="chip click" data-title="${esc(t.value)}">${esc(t.label)}</span>`)
-      .join('');
-
-    $('descHint').textContent = plan.descFromFile
-      ? '来自原文，可以改'
-      : '原文没写摘要 —— 自动截取了正文第一段，可以直接改';
-
-    await refreshMeta();
-    updateSlugPreview();
-    $('bodyPreview').textContent = plan.body.split('\n').slice(0, 40).join('\n');
-  } catch (err) {
-    toast(err.message, true);
+    renderBatch();
+    if (item.id === state.batchSel) fillBatchForm(item);
   }
 }
 
@@ -1162,57 +1347,123 @@ function updateSlugPreview() {
   $('slugPreview').textContent = s ? `最终地址：/posts/${s}/` : '还没填文件名';
 }
 
-async function doIngest() {
-  const slug = $('gSlug').value.trim();
-  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) {
-    toast('文件名只能用英文小写、数字、短横线', true);
-    return;
-  }
-  const meta = {
-    title: $('gTitle').value,
-    description: $('gDesc').value,
-    pubDate: $('gDate').value,
-    categories: TERMS.gCats.get(), // 可以为空
-    tags: TERMS.gTags.get(),
-  };
-  if (!meta.description.trim()) {
-    toast('摘要不能空着（会显示在列表和搜索结果里）', true);
-    $('gDesc').focus();
-    return;
+/**
+ * 写入一批。传入的每一项都得是 status === 'ready' 的。
+ * 服务端逐篇写、失败不中断，所以这里按顺序把结果贴回队列项。
+ */
+async function runIngest(items) {
+  if (!items.length) return;
+  flushBatchForm();
+
+  // 本地先挡一遍：这三样不合格，服务端只会笼统退回一个错，不如直接跳到那一篇
+  for (const it of items) {
+    const f = it.form;
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(f.slug)) {
+      selectBatch(it.id);
+      toast(`「${it.filename}」的文件名只能用英文小写、数字、短横线`, true);
+      $('gSlug').focus();
+      return;
+    }
+    if (!f.desc.trim()) {
+      selectBatch(it.id);
+      toast('摘要不能空着（会显示在列表和搜索结果里）', true);
+      $('gDesc').focus();
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date)) {
+      selectBatch(it.id);
+      toast('发布日期要填完整（YYYY-MM-DD）', true);
+      $('gDate').focus();
+      return;
+    }
   }
 
   $('btnIngest').disabled = true;
+  $('btnIngestOne').disabled = true;
   try {
-    const res = await api('/api/ingest', {
+    const res = await api('/api/ingest-batch', {
       method: 'POST',
-      body: JSON.stringify({ raw: state.raw, slug, meta }),
+      body: JSON.stringify({
+        items: items.map((it) => ({
+          raw: it.raw,
+          slug: it.form.slug,
+          meta: {
+            title: it.form.title,
+            description: it.form.desc,
+            pubDate: it.form.date,
+            categories: it.form.cats,
+            tags: it.form.tags,
+            draft: it.form.draft,
+          },
+        })),
+      }),
     });
 
-    toast(res.renamed ? `已写入 ${res.slug}.md（原名重复，自动加了序号）` : '已写入，源文件请留在 Obsidian，以后改站点这一份');
-    resetIngest();
-    closeModal('ingest');
+    let ok = 0;
+    let bad = 0;
+    (res.results || []).forEach((r, i) => {
+      const it = items[i];
+      if (!it) return;
+      if (r.ok) {
+        it.status = 'done';
+        it.result = r;
+        it.form.slug = r.slug; // 重名被服务端改成 -2，这里跟着更新，不然显示的还是旧名字
+        ok++;
+      } else {
+        it.status = 'error';
+        it.error = r.error || '写入失败';
+        bad++;
+      }
+    });
+
+    renderBatch();
+    const cur = currentBatchItem();
+    if (cur) fillBatchForm(cur);
     await Promise.all([refreshMeta(), loadPosts()]);
 
-    // 站点开着就顺手打开这篇
-    try {
-      const st = await api('/api/status');
-      if (st.dev) window.open(`${st.blogUrl}${res.url}`, '_blank');
-    } catch {
-      /* 打不开就算了，不影响入库 */
+    if (bad === 0) {
+      toast(ok > 1 ? `已写入 ${ok} 篇，源文件请留在 Obsidian` : '已写入，源文件请留在 Obsidian，以后改站点这一份');
+      if (state.batch.every((x) => x.status === 'done')) {
+        resetIngest();
+        closeModal('ingest');
+      }
+    } else {
+      toast(`${ok} 篇写入成功，${bad} 篇没成功（左边标红了）`, true);
+      const firstBad = state.batch.find((x) => x.status === 'error');
+      if (firstBad) selectBatch(firstBad.id);
     }
   } catch (err) {
     toast(err.message, true);
   } finally {
-    $('btnIngest').disabled = false;
+    updateIngestButtons();
   }
 }
 
+/** 队列里还有没写进站点的东西，关窗之前问一句 —— 拖进来的原文不落盘，一关就没了 */
+function confirmLeaveIngest() {
+  const pending = state.batch.filter((x) => x.status === 'ready' || x.status === 'analyzing').length;
+  if (pending === 0) return true;
+  return confirm(`队列里还有 ${pending} 篇没写进站点，关掉就清空了。确定关？`);
+}
+
 function resetIngest() {
-  state.plan = null;
-  state.raw = '';
+  state.batch = [];
+  state.batchSel = null;
+
   $('ingestBody').hidden = true;
+  $('batchDetail').hidden = true;
+  $('batchDetail').classList.remove('locked');
+  $('batchEmpty').hidden = false;
+  $('batchList').innerHTML = '';
+  $('batchCount').textContent = '0';
+  $('checks').innerHTML = '';
+  $('bodyPreview').textContent = '';
   $('fileInput').value = '';
-  $('drop').classList.remove('over');
+  $('drop').classList.remove('over', 'compact');
+
+  TERMS.gCats.set([]);
+  TERMS.gTags.set([]);
+  updateIngestButtons();
 }
 
 // ---------- 打开站点 ----------
@@ -1268,7 +1519,10 @@ function bind() {
     if (closer) {
       const name = closer.dataset.close;
       if (name === 'edit' && state.dirty && !confirm('有未保存的改动，确定关闭吗？')) return;
-      if (name === 'ingest') resetIngest();
+      if (name === 'ingest') {
+        if (!confirmLeaveIngest()) return;
+        resetIngest();
+      }
       return closeModal(name);
     }
 
@@ -1287,14 +1541,27 @@ function bind() {
     const purge = e.target.closest('[data-purge]');
     if (purge) return purgePost(purge.dataset.purge);
 
+    // 入库队列：× 要先判（它在 item 里面），否则点 × 也会切到那一篇
+    const batchRemove = e.target.closest('[data-batch-remove]');
+    if (batchRemove) return removeBatchItem(Number(batchRemove.dataset.batchRemove));
+
+    const batchPick = e.target.closest('[data-batch-item]');
+    if (batchPick) return selectBatch(Number(batchPick.dataset.batchItem));
+
     const slugPick = e.target.closest('[data-slug]');
     if (slugPick) {
       $('gSlug').value = slugPick.dataset.slug;
       updateSlugPreview();
+      flushBatchForm();
+      renderBatch();
     }
 
     const titlePick = e.target.closest('[data-title]');
-    if (titlePick) $('gTitle').value = titlePick.dataset.title;
+    if (titlePick) {
+      $('gTitle').value = titlePick.dataset.title;
+      flushBatchForm();
+      renderBatch();
+    }
   });
 
   // 工具栏
@@ -1334,10 +1601,13 @@ function bind() {
     }
   });
 
-  // 入库
+  // 入库（批量）
   const drop = $('drop');
   drop.addEventListener('click', () => $('fileInput').click());
-  $('fileInput').addEventListener('change', (e) => handleFile(e.target.files[0]));
+  $('fileInput').addEventListener('change', (e) => {
+    handleFiles(e.target.files);
+    e.target.value = ''; // 清掉才能把同一批文件再选一次
+  });
   ['dragenter', 'dragover'].forEach((ev) =>
     drop.addEventListener(ev, (e) => {
       e.preventDefault();
@@ -1350,11 +1620,42 @@ function bind() {
       drop.classList.remove('over');
     }),
   );
-  drop.addEventListener('drop', (e) => handleFile(e.dataTransfer.files[0]));
+  drop.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
 
-  $('gSlug').addEventListener('input', updateSlugPreview);
-  $('btnIngest').addEventListener('click', doIngest);
-  $('btnResetIngest').addEventListener('click', resetIngest);
+  $('gSlug').addEventListener('input', () => {
+    updateSlugPreview();
+    flushBatchForm();
+    renderBatch();
+  });
+  // 改标题 / 摘要 / 日期时顺手同步回队列，左边那条的标题跟着变
+  for (const id of ['gTitle', 'gDesc', 'gDate']) {
+    $(id).addEventListener('input', () => {
+      flushBatchForm();
+      renderBatch();
+    });
+  }
+  TERMS.gCats.onChange(() => {
+    flushBatchForm();
+    renderBatch();
+  });
+  TERMS.gTags.onChange(() => {
+    flushBatchForm();
+    renderBatch();
+  });
+  $('gDraft').addEventListener('change', () => {
+    flushBatchForm();
+    renderBatch();
+  });
+
+  $('btnIngest').addEventListener('click', () => runIngest(state.batch.filter((x) => x.status === 'ready')));
+  $('btnIngestOne').addEventListener('click', () => {
+    const it = currentBatchItem();
+    if (it && it.status === 'ready') runIngest([it]);
+  });
+  $('btnClearBatch').addEventListener('click', () => {
+    if (state.batch.length > 0 && !confirm('清空队列？已经写入的文章不受影响。')) return;
+    resetIngest();
+  });
 
   bindResizer($('resizerSide'), 'side');
   bindResizer($('resizerDrawer'), 'drawer');

@@ -220,6 +220,26 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // 批量入库：一次提交多篇，**逐篇写、互不牵连**
+  // 某篇写失败（摘要空、文件名非法…）只把这笔记成失败，后面照写 ——
+  // 否则十篇里有一篇不对，用户得从头再来一遍。
+  // 上限 50 篇：一次拖进整个文件夹的情况得有个刹车，正常写文章用不到这么多。
+  if (req.method === 'POST' && url.pathname === '/api/ingest-batch') {
+    const body = await readBody(req, 32 * 1024 * 1024);
+    const items = Array.isArray(body.items) ? body.items.slice(0, 50) : [];
+    if (items.length === 0) return json(res, 400, { error: '没有要写入的内容' });
+
+    const results = [];
+    for (const item of items) {
+      try {
+        results.push({ ok: true, ...(await writePost(item)) });
+      } catch (err) {
+        results.push({ ok: false, error: err.message || String(err), code: err.code });
+      }
+    }
+    return json(res, 200, { results, total: items.length });
+  }
+
   // 打开预览：交给根目录 预览.bat，不自己起进程（避免和 bat 抢端口）
   if (req.method === 'POST' && url.pathname === '/api/open-dev') {
     exec(`start "" "${PREVIEW_BAT}"`, { windowsHide: true }, () => {});

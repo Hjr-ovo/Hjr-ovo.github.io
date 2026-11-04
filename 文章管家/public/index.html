@@ -92,92 +92,116 @@
       </main>
     </div>
 
-    <!-- ==================== 入库悬浮窗 ==================== -->
+    <!-- ==================== 入库悬浮窗 ====================
+         2026-11-04 起支持批量：拖一批 .md 进来，左边排队、右边逐篇看诊断改详情，
+         最后「写入全部」。只导入一篇时也走这里，队列里就一行。 -->
     <div class="modal" id="modalIngest" hidden>
       <div class="modal-mask" data-close="ingest"></div>
       <div class="modal-card wide">
         <header class="modal-head">
-          <strong>入库新文章</strong>
-          <span class="modal-sub">拖一个 .md 进来，先看诊断，再决定写不写</span>
+          <strong>入库文章</strong>
+          <span class="modal-sub">拖一批 .md 进来，逐篇看诊断、改详情，再一起写</span>
           <span class="grow"></span>
           <button class="btn ghost tiny" data-close="ingest" title="关闭（Esc）">×</button>
         </header>
 
         <div class="modal-body">
           <div class="drop" id="drop">
-            <strong>把 .md 文件拖到这里</strong>
-            或者点一下选文件。只读不写，先告诉你会发生什么。
-            <input type="file" id="fileInput" accept=".md,.markdown,text/markdown" hidden />
+            <strong id="dropTitle">把 .md 文件拖到这里（可以一次拖多篇）</strong>
+            <span id="dropSub">或者点一下选文件，能多选。只读不写，先告诉你会发生什么。</span>
+            <input type="file" id="fileInput" accept=".md,.markdown,text/markdown" multiple hidden />
           </div>
 
           <div id="ingestBody" hidden>
-            <div class="two-col">
-              <div class="panel">
-                <h2>诊断：这篇会发生什么</h2>
-                <div class="checks" id="checks"></div>
-                <div class="hint" style="font-size: 12px; color: var(--muted); margin-top: 12px">
-                  诊断只是预测，真实结果以站点渲染为准。到这里还没有写任何文件。
+            <div class="batch">
+              <!-- 左：导入队列 -->
+              <aside class="batch-side">
+                <div class="batch-head">
+                  <span>队列 <b id="batchCount">0</b> 篇</span>
+                  <button class="btn ghost tiny" id="btnClearBatch" title="清空队列">清空</button>
+                </div>
+                <div class="batch-list" id="batchList"></div>
+                <div class="batch-tip">点某一篇，右边改它的标题 / 摘要 / 日期 / 分类 / 标签。</div>
+              </aside>
+
+              <!-- 右：选中那一篇的详情 -->
+              <div class="batch-main">
+                <div class="batch-empty" id="batchEmpty">左边点一篇，这里看它的详情</div>
+
+                <div id="batchDetail" hidden>
+                  <div class="two-col">
+                    <div class="panel">
+                      <h2>诊断：这篇会发生什么</h2>
+                      <div class="checks" id="checks"></div>
+                      <div class="hint" style="font-size: 12px; color: var(--muted); margin-top: 12px">
+                        诊断只是预测，真实结果以站点渲染为准。到这里还没有写任何文件。
+                      </div>
+                    </div>
+
+                    <div class="panel">
+                      <h2>起名与归类</h2>
+
+                      <div class="field">
+                        <label for="gSlug">文件名（= URL，自动生成，重复会自动加序号）</label>
+                        <input type="text" id="gSlug" spellcheck="false" />
+                        <div class="hint" id="slugPreview">/posts/…/</div>
+                        <div class="picker" id="pickSlug"></div>
+                      </div>
+
+                      <div class="field">
+                        <label for="gTitle">标题</label>
+                        <input type="text" id="gTitle" />
+                        <div class="picker" id="pickTitle"></div>
+                      </div>
+
+                      <div class="field">
+                        <label for="gDesc">摘要（会显示在列表和搜索结果里）</label>
+                        <textarea id="gDesc" rows="3"></textarea>
+                        <div class="hint" id="descHint"></div>
+                      </div>
+
+                      <div class="row">
+                        <div class="field">
+                          <label for="gDate">发布日期</label>
+                          <input type="date" id="gDate" />
+                        </div>
+                        <div class="field">
+                          <label>分类（可空，可多个）</label>
+                          <div class="terms" id="gCats" data-kind="categories" data-placeholder="输入可搜索，回车新建"></div>
+                        </div>
+                      </div>
+
+                      <div class="field">
+                        <label>标签（可空，可多个）</label>
+                        <div class="terms" id="gTags" data-kind="tags" data-placeholder="输入可搜索，回车新建"></div>
+                      </div>
+
+                      <div class="field">
+                        <label class="switch">
+                          <input type="checkbox" id="gDraft" />
+                          <span>存为草稿</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="panel" style="margin-top: 18px">
+                    <h2>正文预览（前 40 行，只读）</h2>
+                    <div class="preview" id="bodyPreview"></div>
+                  </div>
                 </div>
               </div>
-
-              <div class="panel">
-                <h2>起名与归类</h2>
-
-                <div class="field">
-                  <label for="gSlug">文件名（= URL，自动生成，重复会自动加序号）</label>
-                  <input type="text" id="gSlug" spellcheck="false" />
-                  <div class="hint" id="slugPreview">/posts/…/</div>
-                  <div class="picker" id="pickSlug"></div>
-                </div>
-
-                <div class="field">
-                  <label for="gTitle">标题</label>
-                  <input type="text" id="gTitle" />
-                  <div class="picker" id="pickTitle"></div>
-                </div>
-
-                <div class="field">
-                  <label for="gDesc">摘要（会显示在列表和搜索结果里）</label>
-                  <textarea id="gDesc" rows="3"></textarea>
-                  <div class="hint" id="descHint"></div>
-                </div>
-
-                <div class="row">
-                  <div class="field">
-                    <label for="gDate">发布日期</label>
-                    <input type="date" id="gDate" />
-                  </div>
-                  <div class="field">
-                    <label>分类（可空，可多个）</label>
-                    <div class="terms" id="gCats" data-kind="categories" data-placeholder="输入可搜索，回车新建"></div>
-                  </div>
-                </div>
-
-                <div class="field">
-                  <label>标签（可空，可多个）</label>
-                  <div class="terms" id="gTags" data-kind="tags" data-placeholder="输入可搜索，回车新建"></div>
-                </div>
-
-                <div class="field">
-                  <label class="switch">
-                    <input type="checkbox" id="gDraft" />
-                    <span>存为草稿</span>
-                  </label>
-                </div>
-
-                <div style="display: flex; gap: 8px; margin-top: 16px">
-                  <button class="btn primary" id="btnIngest">写入站点</button>
-                  <button class="btn" id="btnResetIngest">换一个文件</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="panel" style="margin-top: 18px">
-              <h2>正文预览（前 40 行，只读）</h2>
-              <div class="preview" id="bodyPreview"></div>
             </div>
           </div>
         </div>
+
+        <footer class="modal-foot">
+          <span class="state" id="ingestState">还没有文件</span>
+          <span class="grow"></span>
+          <button class="btn" data-close="ingest">关闭</button>
+          <button class="btn" id="btnIngestOne" disabled>只写这一篇</button>
+          <button class="btn primary" id="btnIngest" disabled>写入全部</button>
+        </footer>
       </div>
     </div>
 
