@@ -17,6 +17,11 @@ import remarkCodeTabs from './src/utils/remark-code-tabs.mjs';
 // 为什么也在 remark 阶段：同 code-tabs，Shiki 高亮后会拿不到原始文本结构。
 import remarkObsidian from './src/utils/remark-obsidian.mjs';
 
+// 图片：给每张图补 loading="lazy" / decoding="async"，并可切换图床域名。
+// 一篇文章十几张截图时，不懒加载就是十几个请求同时压在 GitHub 的 raw 域名上，
+// 国内那一步特别慢。切换 CDN 只改文件顶部的 IMAGE_CDN 一行。
+import rehypeImages from './src/utils/rehype-image.mjs';
+
 // 文章改名后的「旧地址 → 新地址」对照表（见 技术架构.md 5.5.2）。
 // 静态站没有服务端，改名会让旧链接直接 404；
 // 这个表让 Astro 在构建时给每个旧地址生成一个跳转页，顶替那个位置。
@@ -56,6 +61,6 @@ export default defineConfig({
     //   rehype 阶段：变成真正的 HTML 结构
     // 顺序也不能反 —— remark 处理 Markdown，rehype 处理 HTML，是流水线的两段。
     remarkPlugins: [remarkMath, remarkObsidian, remarkCodeTabs],
-    rehypePlugins: [rehypeKatex],
+    rehypePlugins: [rehypeKatex, rehypeImages],
   },
 });
