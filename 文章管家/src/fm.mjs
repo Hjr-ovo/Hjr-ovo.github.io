@@ -16,7 +16,33 @@ const ALIASES = {
   description: ['description', 'explain', 'summary'],
 };
 
-export const FIELDS = ['title', 'description', 'pubDate', 'updatedDate', 'categories', 'tags', 'draft'];
+export const FIELDS = [
+  'title',
+  'description',
+  'pubDate',
+  'updatedDate',
+  'categories',
+  'tags',
+  'draft',
+  // 2026-11-04 加：系列名 + 组内序号，站点按它把同一系列的章按顺序排
+  'series',
+  'seriesOrder',
+];
+
+// 这两个字段「留空」的含义是「没有」，要整行删掉而不是写一个空值 ——
+// series: "" 会让站点多出一个空系列名；seriesOrder: "" 直接让构建报错
+const SERIES_FIELDS = new Set(['series', 'seriesOrder']);
+
+const isBlank = (value) => value === '' || value === undefined || value === null;
+
+/** 序号只接受非负整数，填了别的就报错，不写进文件 */
+function toSeriesOrder(value) {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 0) {
+    throw Object.assign(new Error('序号要填非负整数（1、2、3…）'), { code: 'INVALID' });
+  }
+  return num;
+}
 
 // ---------- 切分 ----------
 
@@ -310,8 +336,21 @@ export function patchMeta(raw, changes) {
     const prev = key === 'draft' ? current.draft : pick(current, key);
     if (sameValue(prev, next)) continue;
 
-    const line = `${key}: ${serializeValue(next)}`;
     const idx = findKeyLine(fmLines, key);
+
+    // 系列字段留空 = 没有这个字段，整行删掉
+    if (SERIES_FIELDS.has(key) && isBlank(next)) {
+      if (idx !== -1) fmLines.splice(idx, 1);
+      changedKeys.push(key);
+      continue;
+    }
+
+    // seriesOrder 单独处理：通用序列化会给纯数字加引号（本意是防止
+    // 标题之类的字段被读成数字），但这里站点 schema 要的就是数字
+    const line =
+      key === 'seriesOrder'
+        ? `seriesOrder: ${toSeriesOrder(next)}`
+        : `${key}: ${serializeValue(next)}`;
 
     if (idx === -1) {
       fmLines.push(line);

@@ -1003,6 +1003,8 @@ async function openEdit(slug) {
     TERMS.fCats.set(Array.isArray(d.categories) ? d.categories : d.categories ? [d.categories] : []);
     TERMS.fTags.set(Array.isArray(d.tags) ? d.tags : d.tags ? [d.tags] : []);
     $('fDraft').checked = d.draft === true;
+    $('fSeries').value = d.series ?? '';
+    $('fSeriesOrder').value = d.seriesOrder ?? '';
     $('fBody').value = post.body;
 
     $('editSlug').textContent = `${slug}.md`;
@@ -1035,6 +1037,9 @@ async function save(force = false) {
     categories: TERMS.fCats.get(),
     tags: TERMS.fTags.get(),
     draft: $('fDraft').checked,
+    // 序号留空传空串，服务端会把整行删掉（空值在站点侧是非法数字）
+    series: $('fSeries').value.trim(),
+    seriesOrder: $('fSeriesOrder').value === '' ? '' : Number($('fSeriesOrder').value),
   };
 
   $('btnSave').disabled = true;
@@ -1187,6 +1192,8 @@ function flushBatchForm() {
     cats: TERMS.gCats.get(),
     tags: TERMS.gTags.get(),
     draft: $('gDraft').checked,
+    series: $('gSeries').value.trim(),
+    seriesOrder: $('gSeriesOrder').value,
   };
 }
 
@@ -1206,6 +1213,8 @@ function fillBatchForm(item) {
   TERMS.gCats.set(f.cats || []);
   TERMS.gTags.set(f.tags || []);
   $('gDraft').checked = f.draft === true;
+  $('gSeries').value = f.series || '';
+  $('gSeriesOrder').value = f.seriesOrder || '';
 
   $('pickSlug').innerHTML = (p.slugCandidates || [])
     .map((s) => `<span class="chip click" data-slug="${esc(s)}">${esc(s)}</span>`)
@@ -1285,6 +1294,8 @@ async function handleFiles(fileList) {
         cats: [],
         tags: [],
         draft: false,
+        series: '',
+        seriesOrder: '',
       },
       status: 'analyzing',
       error: '',
@@ -1315,6 +1326,9 @@ async function handleFiles(fileList) {
         cats: plan.meta ? plan.meta.categories || [] : [],
         tags: plan.meta ? plan.meta.tags || [] : [],
         draft: plan.meta ? plan.meta.draft === true : false,
+        // 从原文件里带出来的系列设定，弹窗里可以改
+        series: plan.meta ? plan.meta.series || '' : '',
+        seriesOrder: plan.meta ? plan.meta.seriesOrder || '' : '',
       };
       if (!plan.meta) {
         item.status = 'error';
@@ -1383,6 +1397,8 @@ async function runIngest(items) {
             categories: it.form.cats,
             tags: it.form.tags,
             draft: it.form.draft,
+            series: it.form.series,
+            seriesOrder: it.form.seriesOrder,
           },
         })),
       }),
@@ -1570,7 +1586,7 @@ function bind() {
   });
   $('btnOpenPost').addEventListener('click', () => state.current && openInSite(state.current.slug, true));
 
-  for (const id of ['fTitle', 'fDesc', 'fDate', 'fUpdated']) {
+  for (const id of ['fTitle', 'fDesc', 'fDate', 'fUpdated', 'fSeries', 'fSeriesOrder']) {
     $(id).addEventListener('input', markDirty);
   }
   TERMS.fCats.onChange(markDirty);
@@ -1617,7 +1633,7 @@ function bind() {
     renderBatch();
   });
   // 改标题 / 摘要 / 日期时顺手同步回队列，左边那条的标题跟着变
-  for (const id of ['gTitle', 'gDesc', 'gDate']) {
+  for (const id of ['gTitle', 'gDesc', 'gDate', 'gSeries', 'gSeriesOrder']) {
     $(id).addEventListener('input', () => {
       flushBatchForm();
       renderBatch();

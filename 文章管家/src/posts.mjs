@@ -202,6 +202,13 @@ export async function savePost(slug, payload) {
     categories: (meta.categories || []).map((s) => String(s).trim()).filter(Boolean),
     tags: (meta.tags || []).map((s) => String(s).trim()).filter(Boolean),
     draft: meta.draft === true,
+    // 系列（2026-11-04 加）：空串交给 patchMeta 处理成「删掉这一行」，
+    // 序号在这里不做转换，非法值由 toSeriesOrder 抛错、接口回 400
+    series: String(meta.series ?? '').trim(),
+    seriesOrder:
+      meta.seriesOrder === '' || meta.seriesOrder === undefined || meta.seriesOrder === null
+        ? ''
+        : meta.seriesOrder,
   });
 
   // 2) 正文：只有真的改了才替换（不改就保持逐字节原样）

@@ -31,6 +31,10 @@ const KNOWN_FIELDS = new Set([
   'slug',
   'explain',
   'summary',
+  // 系列（2026-11-04 加）：列进来才不会在下面「未知字段原样保留」那段
+  // 又输出一遍，否则文件里会出现两行 series
+  'series',
+  'seriesOrder',
 ]);
 
 /** 把正文切成「代码块之外」的行，避免误统计代码里的 == 与 # */
@@ -266,6 +270,13 @@ export async function analyze(raw, ctx = {}) {
       categories: cats,
       tags: (Array.isArray(data.tags) ? data.tags : data.tags ? [data.tags] : []).map(String),
       draft: data.draft === true,
+      // 系列两个字段跟着导入走：从 Obsidian 复制来的笔记里如果写了，
+      // 就不用在弹窗里再填一遍
+      series: data.series ? String(data.series).trim() : '',
+      seriesOrder:
+        data.seriesOrder === undefined || data.seriesOrder === null
+          ? ''
+          : String(data.seriesOrder),
     },
     body,
     bodyRaw: doc.bodyRaw,
@@ -328,6 +339,22 @@ export async function writePost({ raw, slug, meta }) {
   lines.push(`categories: ${arr(meta.categories || [])}`);
   lines.push(`tags: ${arr(meta.tags || [])}`);
   lines.push(`draft: ${meta.draft === true ? 'true' : 'false'}`);
+
+  // 系列（选填）：没填就完全不写这两行。每篇都挂一个空的 `series: ""`
+  // 会让站点把它们算成同一个「无名系列」，反而把没关系的文章聚成一组
+  const seriesName = String(meta.series || '').trim();
+  if (seriesName) lines.push(`series: ${q(seriesName)}`);
+
+  const seriesOrder = Number(meta.seriesOrder);
+  const hasSeriesOrder =
+    meta.seriesOrder !== '' &&
+    meta.seriesOrder !== undefined &&
+    meta.seriesOrder !== null;
+  // 裸数字：站点 schema 是 z.number()，yamlString 习惯给纯数字加引号，
+  // 这里会变成字符串 "2" 直接校验失败，所以不走 q()
+  if (hasSeriesOrder && Number.isInteger(seriesOrder) && seriesOrder >= 0) {
+    lines.push(`seriesOrder: ${seriesOrder}`);
+  }
 
   // Obsidian 专有字段（aliases、cssclasses…）原样保留在末尾
   for (const key of Object.keys(data)) {
