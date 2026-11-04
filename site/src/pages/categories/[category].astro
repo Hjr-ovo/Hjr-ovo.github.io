@@ -14,7 +14,7 @@ import { formatDate, isoDate } from '../../utils/format-date';
 import { withWordCount } from '../../utils/word-count';
 import { CATEGORY_DESC } from '../../data/categories';
 import SortBar from '../../components/SortBar.astro';
-import { sortBySeries, buildSeriesPositions } from '../../utils/series';
+import { sortBySeries } from '../../utils/series';
 
 // 排序栏的选项。第一项「按系列」就是下面渲染出来的默认顺序 ——
 // 同一系列按章节号排，其余按日期倒序，规则见 utils/series.ts
@@ -28,9 +28,6 @@ const SORT_OPTIONS = [
 
 export async function getStaticPaths() {
   const posts = await getCollection('posts', ({ data }) => !data.draft);
-
-  // 系列位置按全站算，保证分类页的「2/4」和文章页的「本篇 2/4」是同一个数
-  const seriesPositions = buildSeriesPositions(posts);
 
   // 按分类分组。一篇文章可以有多个分类（2026-10-18 起），
   // 在每个分类的文章列表里各出现一次。
@@ -48,12 +45,11 @@ export async function getStaticPaths() {
       // 分类内用系列感知排序：同系列聚成一组、组内按章节号。
       // withWordCount 补字数，卡片里的日期行和排序键都用得上
       posts: withWordCount(sortBySeries(list)),
-      seriesPositions,
     },
   }));
 }
 
-const { posts, seriesPositions } = Astro.props;
+const { posts } = Astro.props;
 const category = Astro.params.category;
 ---
 
@@ -70,7 +66,6 @@ const category = Astro.params.category;
 
   <ul class="post-list" id="post-list">
     {posts.map((post, index) => {
-      const series = seriesPositions.get(post.id);
       return (
       <li
         class="post-item"
@@ -79,11 +74,6 @@ const category = Astro.params.category;
         data-title={post.data.title}
         data-words={post.words}
       >
-        {series && (
-          <span class="series-tag">
-            {series.name} · {series.index}/{series.total}
-          </span>
-        )}
         <h2>
           <a href={`/posts/${post.id}/`}>{post.data.title}</a>
         </h2>

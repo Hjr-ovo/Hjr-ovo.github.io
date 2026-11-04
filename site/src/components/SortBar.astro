@@ -6,7 +6,7 @@
 //
 //   1. **不重新渲染内容**，只移动 DOM 节点 —— 列表里有标题、摘要、标签、
 //      字数，重新拼一遍既慢又容易和卡片样式脱节；
-//   2. **关掉 JS 也能用**，页面出来就是默认顺序（分类页=按系列，归档页=时间轴）；
+//   2. **关掉 JS 也能用**，页面出来就是默认顺序（分类详情页=按系列，分类总览=按篇数）；
 //   3. **排序键来自 DOM**（data-date / data-title / data-words / data-order），
 //      所以任何页面只要给条目带上这几个属性就能用这个栏，不需要改这里的代码。
 //
@@ -20,6 +20,7 @@ const {
   options,
   storageKey = '',
   initial = 'series',
+  label = '文章排序',
 } = Astro.props as {
   /** 要排序的列表选择器，如 '#post-list' */
   target: string;
@@ -27,6 +28,8 @@ const {
   /** localStorage 的键；同一个页面类型共用一个，刷新后保持读者上次的选择 */
   storageKey?: string;
   initial?: string;
+  /** 读屏软件念的组名。文章列表和分类卡片用不同说法 */
+  label?: string;
 };
 ---
 
@@ -37,7 +40,7 @@ const {
   data-storage={storageKey}
   data-initial={initial}
   role="group"
-  aria-label="文章排序"
+  aria-label={label}
 >
   {options.map((option) => (
     <button type="button" class="sort-btn" data-sort={option.value}>
@@ -57,6 +60,9 @@ const {
     dateAsc: (a, b) => (a.dataset.date || '').localeCompare(b.dataset.date || ''),
     title: (a, b) => collator.compare(a.dataset.title || '', b.dataset.title || ''),
     words: (a, b) => Number(b.dataset.words || 0) - Number(a.dataset.words || 0),
+    // 分类总览页的卡片：篇数多的在前、最近更新的在前
+    count: (a, b) => Number(b.dataset.count || 0) - Number(a.dataset.count || 0),
+    latest: (a, b) => (b.dataset.latest || '').localeCompare(a.dataset.latest || ''),
   };
 
   function applySort(list, mode) {

@@ -114,42 +114,6 @@ export function takeWholeSeries<T extends Sortable>(posts: T[], limit: number): 
   return taken;
 }
 
-/** 一篇系列文章在组内的位置信息 */
-export type SeriesPosition = {
-  name: string;
-  /** 组内第几篇，从 1 开始 */
-  index: number;
-  total: number;
-};
-
-/**
- * 算出「每篇文章在各自系列里的位置」。
- *
- * 列表卡片上要显示「软件工程 · 2/4」，而这里的 2/4 必须和文章页里的
- * 上一篇/下一篇完全一致 —— 所以位置只在这里算一次，两处共用，
- * 免得一边按序号算、一边按数组下标算，对不上。
- */
-export function buildSeriesPositions(posts: Sortable[]): Map<string, SeriesPosition> {
-  const groups = new Map<string, Sortable[]>();
-  for (const post of posts) {
-    const name = post.data.series;
-    if (!name) continue;
-    const list = groups.get(name);
-    if (list) list.push(post);
-    else groups.set(name, [post]);
-  }
-
-  const positions = new Map<string, SeriesPosition>();
-  for (const [name, members] of groups) {
-    const ordered = [...members].sort(compareInSeries);
-    ordered.forEach((post, i) => {
-      positions.set(post.id, { name, index: i + 1, total: ordered.length });
-    });
-  }
-
-  return positions;
-}
-
 /** 系列导航：文章页底部要的全部信息 */
 export type SeriesNav<T> = {
   name: string;
@@ -168,6 +132,9 @@ export type SeriesNav<T> = {
  *
  * 只有一篇的「系列」不出导航：显示「本篇 1/1」外加一个无法点击的上一篇，
  * 纯属噪音。
+ *
+ * 列表卡片上不显示「2/4」（2026-11-04 用户要求去掉），但分组顺序照旧 ——
+ * 编号只在这个导航里出现，算的口径也只此一处。
  */
 export function getSeriesNav<T extends Sortable>(post: T, all: T[]): SeriesNav<T> | null {
   const name = post.data.series;

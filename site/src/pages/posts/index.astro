@@ -10,16 +10,20 @@
 // 时间轴的形态（2026-10-17 定，用户三选一选的）：
 //   一根竖线贯穿全页，每个「有文章的月份」是一个节点（圆点 + 月份标签），
 //   当月文章列在节点下面。为什么按月而不是按日/按篇：文章再多也整齐，
-//   月份是天然的阅读单位；按日分当前 6 篇全是同一天会只剩一个节点，
-//   按篇分则同日多篇会重复排日期、分类胶囊也放不下。
+//   月份是天然的阅读单位。
 //
-// 和首页一样：集合顺序不确定，必须自己按日期倒序排。
+// 2026-11-04 两处调整：
+//   1. 同一「天」的文章共用左侧日期 —— 四篇软件工程笔记同一天发布，
+//      每行都重复一遍 11-03 既冗余又让人误以为是四天。现在一天一组，
+//      日期只在组首出现一次，组内各行的字数/标题左端仍然对齐。
+//   2. 顶部加吸顶的月份导航。文章攒到几十篇、时间跨度几年以后，
+//      靠滚轮找「两年前那篇」不现实，得能一下跳过去。
+//      2026-11-04 同时砍掉了「列表视图」—— 归档页只保留时间轴。
 
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { isoDate } from '../../utils/format-date';
 import { withWordCount } from '../../utils/word-count';
-import SortBar from '../../components/SortBar.astro';
 
 const posts = withWordCount(
   (await getCollection('posts', ({ data }) => !data.draft)).sort(
@@ -27,33 +31,50 @@ const posts = withWordCount(
   ),
 );
 
-// 条目行只需要月-日：月份已经写在上面的节点标签里，再重复一遍是噪音
-const monthDay = (date: Date) =>
-  `${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+const pad = (n: number) => String(n).padStart(2, '0');
 
-// 按月分组（key = YYYY-MM）。posts 已经是倒序了，月份自然从新到旧。
-// 标签带年份：跨年时「9 月」会出现两次，不带年份分不清是哪年。
-const months: { key: string; label: string; posts: typeof posts }[] = [];
+type DayGroup = { key: string; monthDay: string; posts: typeof posts };
+type MonthGroup = {
+  key: string;
+  /** 节点标签：2026 年 11 月 */
+  label: string;
+  /** 导航药丸上的短写法：2026/11 */
+  short: string;
+  days: DayGroup[];
+};
+
+// 两级分组：月 → 日。posts 已经是倒序，月份和日期都自然从新到旧。
+// 顺着最后一项往后追加即可，不需要先建 Map 再排序。
+const months: MonthGroup[] = [];
 for (const post of posts) {
   const date = post.data.pubDate;
-  const key = `${date.getFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
-  const label = `${date.getFullYear()} 年 ${date.getUTCMonth() + 1} 月`;
-  const last = months[months.length - 1];
-  if (last && last.key === key) {
-    last.posts.push(post);
-  } else {
-    months.push({ key, label, posts: [post] });
-  }
-}
+  const monthKey = `${date.getFullYear()}-${pad(date.getMonth() + 1)}`;
 
-// 列表视图的排序选项。没有「按系列」——归档页本来就是时间性质的，
-// 系列在这里会被月份打散，给一个排不出来的选项只会让人困惑。
-const SORT_OPTIONS = [
-  { value: 'dateDesc', label: '最新在前' },
-  { value: 'dateAsc', label: '最早在前' },
-  { value: 'title', label: '按标题' },
-  { value: 'words', label: '按字数' },
-];
+  let month = months[months.length - 1];
+  if (!month || month.key !== monthKey) {
+    month = {
+      key: monthKey,
+      label: `${date.getFullYear()} 年 ${date.getMonth() + 1} 月`,
+      short: `${date.getFullYear()}/${pad(date.getMonth() + 1)}`,
+      days: [],
+    };
+    months.push(month);
+  }
+
+  // 同一天共用日期：键精确到日，值只算到「月-日」
+  // （月份已经写在节点标签上，条目里再带年份是噪音）
+  const dayKey = isoDate(date);
+  let day = month.days[month.days.length - 1];
+  if (!day || day.key !== dayKey) {
+    day = {
+      key: dayKey,
+      monthDay: `${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+      posts: [],
+    };
+    month.days.push(day);
+  }
+  day.posts.push(post);
+}
 ---
 
 <BaseLayout title="全部文章" description="所有文章的归档，按月份排在时间轴上。">
@@ -62,21 +83,24 @@ const SORT_OPTIONS = [
   <h1>全部文章</h1>
   <p class="page-desc">共 {posts.length} 篇。</p>
 
-  {posts.length > 0 && (
-    <div class="archive-toolbar" data-view="timeline" data-toolbar>
-      <SortBar
-        target="#flat-list"
-        storageKey="sort:archive"
-        initial="dateDesc"
-        options={SORT_OPTIONS}
-      />
-      <div class="view-switch" role="group" aria-label="显示方式">
-        <button type="button" data-view-btn="timeline" class="is-active">
-          时间轴
-        </button>
-        <button type="button" data-view-btn="list">列表</button>
-      </div>
-    </div>
+  {/* 月份导航：只有一个月时没得跳，整条不渲染。
+      每条都是普通锚点链接 —— 关掉 JS 也点得动，只是没有平滑滚动和高亮 */}
+  {months.length > 1 && (
+    <nav class="tl-jump" data-jump aria-label="按月份跳转">
+      <ul class="tl-jump-list" data-jump-list>
+        {months.map((month) => (
+          <li>
+            <a
+              class="tl-jump-chip"
+              href={`#m-${month.key}`}
+              data-jump-to={`m-${month.key}`}
+            >
+              {month.short}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
   )}
 
   {posts.length === 0 ? (
@@ -84,128 +108,147 @@ const SORT_OPTIONS = [
       <p>还没有文章。</p>
     </div>
   ) : (
-    <>
-    <ol class="timeline" data-timeline>
+    <ol class="timeline">
       {months.map((month) => (
-        <li class="timeline-month">
+        <li class="timeline-month" id={`m-${month.key}`}>
           {/* 圆点是纯装饰，读屏软件跳过；月份标签才是这一节点的名字 */}
           <span class="timeline-dot" aria-hidden="true" />
           <h2 class="timeline-label">{month.label}</h2>
-          <ul class="timeline-items">
-            {month.posts.map((post) => (
-              <li
-                class="archive-item"
-                data-date={isoDate(post.data.pubDate)}
-                data-title={post.data.title}
-                data-words={post.words}
-              >
-                <time class="archive-date" datetime={isoDate(post.data.pubDate)}>
-                  {monthDay(post.data.pubDate)}
+
+          <ol class="timeline-days">
+            {month.days.map((day) => (
+              <li class="timeline-day">
+                <time class="archive-date" datetime={day.key}>
+                  {day.monthDay}
                 </time>
-                {/* 字数紧跟在日期后面：一行里「什么时候发的、多长」读起来是连贯的。
-                    放最右侧会被标签组挤走，放标题后面又会把标题戳断。 */}
-                {post.wordLabel && (
-                  <span class="archive-words">{post.wordLabel}</span>
-                )}
-                <a class="archive-link" href={`/posts/${post.id}/`}>
-                  {post.data.title}
-                </a>
-                {/* 右侧一组胶囊：分类用强调色、标签用灰色，与首页 / 文章页同一套配色。
-                    标签数量有可能很长（算法题尤其），所以整组允许换行，不挤标题。 */}
-                {(post.data.categories.length > 0 || post.data.tags.length > 0) && (
-                  <span class="archive-meta">
-                    {post.data.categories.map((category) => (
-                      <a class="tag" href={`/categories/${category}/`}>
-                        {category}
+
+                <ul class="timeline-items">
+                  {day.posts.map((post) => (
+                    <li class="archive-item">
+                      {/* 字数紧跟在日期后面：一行里「什么时候发的、多长」读起来是连贯的。
+                          放最右侧会被标签组挤走，放标题后面又会把标题戳断。
+                          日期已经由整组共用，这里只留字数。 */}
+                      {post.wordLabel && (
+                        <span class="archive-words">{post.wordLabel}</span>
+                      )}
+                      <a class="archive-link" href={`/posts/${post.id}/`}>
+                        {post.data.title}
                       </a>
-                    ))}
-                    {post.data.tags.map((tag) => (
-                      <a class="tag muted" href={`/tags/${tag}/`}>
-                        {tag}
-                      </a>
-                    ))}
-                  </span>
-                )}
+                      {/* 右侧一组胶囊：分类用强调色、标签用灰色，与首页 / 文章页同一套配色。
+                          标签数量有可能很长（算法题尤其），所以整组允许换行，不挤标题。 */}
+                      {(post.data.categories.length > 0 || post.data.tags.length > 0) && (
+                        <span class="archive-meta">
+                          {post.data.categories.map((category) => (
+                            <a class="tag" href={`/categories/${category}/`}>
+                              {category}
+                            </a>
+                          ))}
+                          {post.data.tags.map((tag) => (
+                            <a class="tag muted" href={`/tags/${tag}/`}>
+                              {tag}
+                            </a>
+                          ))}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </li>
             ))}
-          </ul>
+          </ol>
         </li>
       ))}
     </ol>
-
-    {/* 列表视图的容器，内容由下面的脚本从时间轴条目克隆过来。
-        不在这里再渲染一遍的原因：同一批文章会在 HTML 里出现两次，
-        页面体积翻倍，而且以后改条目结构还得记住改两处 */}
-    <ol class="flat-list" id="flat-list" hidden></ol>
-    </>
   )}
 </BaseLayout>
 
 <script>
-  // 时间轴 / 列表 视图切换
+  // 月份导航：点一下滚到那个月，滚动时把当前所在月份标出来。
   //
-  // 时间轴是服务端渲染好的，切到列表时**克隆**一份条目出来重排 ——
-  // 用克隆而不是搬走原节点，是为了切回时间轴时能原样还原（月份分组、缩进都在）。
-  // 克隆只发生在内存里，页面的 HTML 不会因此变大。
-  const toolbar = document.querySelector('[data-toolbar]');
-  const timeline = document.querySelector('[data-timeline]');
-  const flat = document.getElementById('flat-list');
+  // 三件事要注意：
+  //   1. 导航是吸顶的，判断「某个月份到了没」得把它占的高度算进去，
+  //      否则月份标题刚好被导航盖住的那一刻还会被判成「还没到」；
+  //   2. scrollIntoView 尊重 CSS 的 scroll-margin-top，所以月份节点上
+  //      留了和导航等高的上边距（见 global.css）；
+  //   3. 开了「减少动态效果」的人直接跳，不做平滑滚动。
+  const nav = document.querySelector('[data-jump]');
+  const strip = document.querySelector('[data-jump-list]');
 
-  if (toolbar && timeline && flat) {
-    const VIEW_KEY = 'view:archive';
-    let built = false;
+  if (nav && strip) {
+    const months = [...strip.querySelectorAll('[data-jump-to]')]
+      .map((node) => {
+        const chip = node as HTMLElement;
+        const target = document.getElementById(chip.dataset.jumpTo || '');
+        return target ? { chip, target } : null;
+      })
+      .filter((item): item is { chip: HTMLElement; target: HTMLElement } => item !== null);
 
-    const buildFlat = () => {
-      if (built) return;
-      for (const item of timeline.querySelectorAll('.archive-item')) {
-        const clone = item.cloneNode(true);
-        // 时间轴里的日期只写「月-日」（月份已经写在节点标签上）；
-        // 扁平列表没有月份节点，得把完整日期补回去，否则分不清年份
-        const date = clone.querySelector('.archive-date');
-        if (date && item.dataset.date) {
-          date.textContent = item.dataset.date;
-          date.setAttribute('datetime', item.dataset.date);
-        }
-        flat.append(clone);
-      }
-      built = true;
-      // 列表是刚生成的，排序栏绑定的还是空容器，通知它补排一次
-      document
-        .querySelector('[data-sort-bar]')
-        ?.dispatchEvent(new Event('resort'));
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let current: HTMLElement | null = null;
+
+    // 药丸多到装不下时横向滚动，把当前这个挪进视野（居中）。
+    // 不直接用 chip.scrollIntoView：那会连整个页面一起滚。
+    const reveal = (chip: HTMLElement) => {
+      const left = chip.offsetLeft;
+      const visible =
+        left >= strip.scrollLeft &&
+        left + chip.offsetWidth <= strip.scrollLeft + strip.clientWidth;
+      if (visible) return;
+      strip.scrollTo({
+        left: Math.max(0, left - strip.clientWidth / 2 + chip.offsetWidth / 2),
+        behavior: reduced.matches ? 'auto' : 'smooth',
+      });
     };
 
-    const setView = (view) => {
-      toolbar.dataset.view = view;
-      for (const button of toolbar.querySelectorAll('[data-view-btn]')) {
-        const on = button.dataset.viewBtn === view;
-        button.classList.toggle('is-active', on);
-        button.setAttribute('aria-pressed', String(on));
+    const mark = (chip: HTMLElement) => {
+      if (chip === current) return;
+      current = chip;
+      for (const item of months) {
+        const on = item.chip === chip;
+        item.chip.classList.toggle('is-current', on);
+        item.chip.setAttribute('aria-current', on ? 'true' : 'false');
       }
-
-      const isList = view === 'list';
-      if (isList) buildFlat();
-      flat.hidden = !isList;
-      timeline.hidden = isList;
-
-      try {
-        localStorage.setItem(VIEW_KEY, view);
-      } catch {
-        /* 隐私模式下记不住，不影响切换 */
-      }
+      reveal(chip);
     };
 
-    toolbar.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-view-btn]');
-      if (button) setView(button.dataset.viewBtn);
+    let queued = false;
+    const sync = () => {
+      queued = false;
+      // 吸顶时 top 正好是 0；没吸顶时是正数，用它切换底部那条分隔线
+      const rect = nav.getBoundingClientRect();
+      nav.classList.toggle('is-stuck', rect.top <= 0);
+
+      const line = rect.height + 24;
+      let active = months[0];
+      for (const item of months) {
+        if (item.target.getBoundingClientRect().top - line <= 0) active = item;
+        else break;
+      }
+      if (active) mark(active.chip);
+    };
+
+    const schedule = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(sync);
+    };
+
+    strip.addEventListener('click', (event) => {
+      const chip = (event.target as HTMLElement).closest('[data-jump-to]');
+      if (!(chip instanceof HTMLElement)) return;
+      const target = document.getElementById(chip.dataset.jumpTo || '');
+      if (!target) return;
+      event.preventDefault();
+      target.scrollIntoView({
+        behavior: reduced.matches ? 'auto' : 'smooth',
+        block: 'start',
+      });
+      // 地址栏跟着变，这种位置才分享得出去
+      history.replaceState(null, '', `#${chip.dataset.jumpTo}`);
     });
 
-    let savedView = null;
-    try {
-      savedView = localStorage.getItem(VIEW_KEY);
-    } catch {
-      /* 同上 */
-    }
-    setView(savedView === 'list' ? 'list' : 'timeline');
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    sync();
   }
 </script>

@@ -1554,11 +1554,34 @@ article img {
   color: var(--ink);
 }
 
-/* 当月文章列表：整组左缩进 1.5rem，和月份标签对齐挂在节点下 */
-.timeline-items {
+/* 每个月节点：吸顶导航（.tl-jump）会盖住页面顶部，
+   跳过来时给节点留出和导航等高的上边距，否则月份标题正好被压在导航底下 */
+.timeline-month {
+  scroll-margin-top: 4rem;
+}
+
+/* 当月文章：一天一组。整组左缩进 1.5rem，和月份标签对齐挂在节点下 */
+.timeline-days {
   list-style: none;
   margin: 0;
   padding: 0 0 0 1.5rem;
+}
+
+/* 一天 = 左日期 + 右文章列。用 grid 而不是 flex：
+   同一天里每一行的字数、标题都从同一条竖线起排，读者才扫得动 */
+.timeline-day {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 0.75rem;
+  align-items: start;
+}
+
+/* 组内各行。日期已经由外面那列统一管，这里不再缩进 */
+.timeline-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
 }
 
 /* 一行 = 月日 + 标题 + 分类/标签。日期等宽数字，标题长短不一时右端才对得齐 */
@@ -1591,11 +1614,18 @@ article img {
   transform: translateY(-1px);
 }
 
+/* 日期：一天里只出现一次（见 .timeline-day）。
+   上内边距和 .archive-item 的一致，让日期和组内第一行的标题坐在同一条基线上 */
 .archive-date {
-  flex: 0 0 auto;
+  /* 0.75rem：让日期文字和组内第一行标题的视觉中线齐平。
+     这个数是量出来的（用 Range 量文字、不是量元素 —— 元素 rect 含 padding，
+     会量出「差 6px」的假结论），改字号或行高时要重新量 */
+  padding-top: 0.75rem;
   font-size: 0.82rem;
+  line-height: 1.4;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* 字数：比日期再淡一档。给固定最小宽度是因为各篇长度差一个数量级
@@ -2029,8 +2059,11 @@ article img {
    系列与排序（2026-11-04）
    ============================================================ */
 
-/* 列表卡片上的系列标记。用强调色的浅底胶囊，和分类/标签的胶囊在同一条视觉线上，
-   但颜色不同 —— 读者一眼能分出「这是系列的第几篇」和「这属于哪个分类」 */
+/* 系列标记（文章页底部的系列导航用）。用强调色的浅底胶囊，
+   和分类/标签的胶囊在同一条视觉线上，但颜色不同，一眼能分出
+   「这属于哪个系列」和「这属于哪个分类」。
+   ⚠️ 2026-11-04 用户要求：列表卡片上不再显示「软件工程 · 2/4」，
+   排序照旧按系列聚拢，只是不再把这个编号摆到卡片上。 */
 .series-tag {
   display: inline-block;
   margin-bottom: 0.35rem;
@@ -2080,80 +2113,70 @@ article img {
   background: var(--accent-soft);
 }
 
-/* ---------- 归档页工具栏 ---------- */
-.archive-toolbar {
+/* ---------- 归档页的月份导航（2026-11-04） ----------
+ * 吸顶在内容顶部：文章按年份铺开后，「翻到两年前那个月」不该靠滚轮。
+ * 每条是一个真锚点，关掉 JS 也点得动；JS 只负责平滑滚动和当前月份高亮。 */
+
+.tl-jump {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  margin: 1.25rem -0.6rem 0.4rem;
+  padding: 0.5rem 0.6rem;
+  /* 必须不透明：吸顶后文章会从它后面划过去 */
+  background: var(--bg);
+  /* 分隔线平时透明，吸顶时才显形（JS 加 .is-stuck）——
+     否则顶端会凭空多出一条横线 */
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.16s ease;
+}
+
+.tl-jump.is-stuck {
+  border-bottom-color: var(--line);
+}
+
+.tl-jump-list {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.6rem;
-  margin: 1rem 0 1.1rem;
-}
-
-.archive-toolbar .sort-bar {
-  flex: 1 1 auto;
+  gap: 0.4rem;
   margin: 0;
+  padding: 0;
+  list-style: none;
+  /* 月份多到装不下时横向滚。滚动条藏掉：
+     它高十来像素，会把这条本就该轻薄的东西撑得很笨重 */
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-/* 时间轴视图下排序没有意义（排了会打散月份分组），整条藏起来。
-   用属性选择器而不是 JS 增删 class，少一处状态要同步 */
-.archive-toolbar[data-view='timeline'] .sort-bar {
+.tl-jump-list::-webkit-scrollbar {
   display: none;
 }
 
-.view-switch {
-  display: flex;
-  flex: 0 0 auto;
-  overflow: hidden;
+.tl-jump-chip {
+  display: inline-block;
+  padding: 0.22rem 0.62rem;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+  text-decoration: none;
   border: 1px solid var(--line);
   border-radius: 999px;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
 }
 
-.view-switch button {
-  padding: 0.3rem 0.8rem;
-  font-family: inherit;
-  font-size: 0.8rem;
-  color: var(--muted);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
+.tl-jump-chip:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
 }
 
-.view-switch button.is-active {
-  /* 选中项反色：深底亮字（浅色主题）/ 亮底深字（深色主题），两种主题都成立 */
-  color: var(--bg);
-  background: var(--accent);
-}
-
-/* ---------- 归档页的扁平列表 ---------- */
-.flat-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-/* 和时间轴里的条目共用 .archive-item 的排版，只换掉「卡片式」的那部分：
-   扁平列表是一整列，用分隔线而不是浮起的卡片 */
-.flat-list .archive-item {
-  margin: 0;
-  padding: 0.55rem;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-}
-
-.flat-list .archive-item:last-child {
-  border-bottom: 0;
-}
-
-/* 悬停时只留底色，不做位移 —— 列表里每一行都往上飘一下会晃眼 */
-.flat-list .archive-item:hover {
-  transform: none;
-  box-shadow: none;
-}
-
-/* 完整日期（2026-11-03）比时间轴里的「月-日」宽，给个下限让标题左端对得齐 */
-.flat-list .archive-date {
-  min-width: 5.4rem;
+.tl-jump-chip.is-current {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 /* ---------- 文章页的系列导航 ---------- */
@@ -2285,13 +2308,5 @@ article img {
 
   .series-step.is-empty {
     display: none;
-  }
-
-  .archive-toolbar {
-    justify-content: space-between;
-  }
-
-  .flat-list .archive-date {
-    min-width: 4.6rem;
   }
 }
