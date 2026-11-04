@@ -1,0 +1,128 @@
+---
+// 文章排序栏
+//
+// 一个纯前端的排序控件：服务端照默认顺序渲染好整个列表，这里只是用 JS
+// 把已有的条目重新排一遍。三个设计约束：
+//
+//   1. **不重新渲染内容**，只移动 DOM 节点 —— 列表里有标题、摘要、标签、
+//      字数，重新拼一遍既慢又容易和卡片样式脱节；
+//   2. **关掉 JS 也能用**，页面出来就是默认顺序（分类页=按系列，归档页=时间轴）；
+//   3. **排序键来自 DOM**（data-date / data-title / data-words / data-order），
+//      所以任何页面只要给条目带上这几个属性就能用这个栏，不需要改这里的代码。
+//
+// 「按系列」用的是 data-order —— 它就是服务端渲染时的原始次序，
+// 也就是 sortBySeries 算好的结果。存起来再读回来，比在前端重算一遍系列规则可靠。
+
+type Option = { value: string; label: string };
+
+const {
+  target,
+  options,
+  storageKey = '',
+  initial = 'series',
+} = Astro.props as {
+  /** 要排序的列表选择器，如 '#post-list' */
+  target: string;
+  options: Option[];
+  /** localStorage 的键；同一个页面类型共用一个，刷新后保持读者上次的选择 */
+  storageKey?: string;
+  initial?: string;
+};
+---
+
+<div
+  class="sort-bar"
+  data-sort-bar
+  data-target={target}
+  data-storage={storageKey}
+  data-initial={initial}
+  role="group"
+  aria-label="文章排序"
+>
+  {options.map((option) => (
+    <button type="button" class="sort-btn" data-sort={option.value}>
+      {option.label}
+    </button>
+  ))}
+</div>
+
+<script>
+  // 中文按拼音比。Intl.Collator 是浏览器内置的，不用引第三方拼音库
+  // （这个站从建起来就坚持零前端依赖）。带 numeric: true 让「第2章」排在「第10章」前。
+  const collator = new Intl.Collator('zh-CN', { numeric: true });
+
+  const READERS = {
+    series: (a, b) => Number(a.dataset.order) - Number(b.dataset.order),
+    dateDesc: (a, b) => (b.dataset.date || '').localeCompare(a.dataset.date || ''),
+    dateAsc: (a, b) => (a.dataset.date || '').localeCompare(b.dataset.date || ''),
+    title: (a, b) => collator.compare(a.dataset.title || '', b.dataset.title || ''),
+    words: (a, b) => Number(b.dataset.words || 0) - Number(a.dataset.words || 0),
+  };
+
+  function applySort(list, mode) {
+    const compare = READERS[mode];
+    if (!compare) return;
+    // Array.prototype.sort 是稳定的：相等项保持原有先后
+    Array.from(list.children)
+      .sort(compare)
+      .forEach((item) => list.append(item));
+  }
+
+  function readSaved(key) {
+    try {
+      return key ? localStorage.getItem(key) : null;
+    } catch {
+      // 隐私模式下 localStorage 会抛错，记不住偏好不影响排序本身
+      return null;
+    }
+  }
+
+  function saveSort(key, mode) {
+    try {
+      if (key) localStorage.setItem(key, mode);
+    } catch {
+      /* 同上，忽略 */
+    }
+  }
+
+  for (const bar of document.querySelectorAll('[data-sort-bar]')) {
+    // 目标列表可能此刻还不存在（归档页的列表视图是切过去才生成的），
+    // 所以不缓存节点，每次现查
+    const getList = () => document.querySelector(bar.dataset.target);
+
+    const storageKey = bar.dataset.storage || '';
+    const fallback = bar.dataset.initial || 'series';
+    const saved = readSaved(storageKey);
+    let active = saved && READERS[saved] ? saved : fallback;
+
+    const paint = (mode) => {
+      for (const button of bar.querySelectorAll('[data-sort]')) {
+        button.classList.toggle('is-active', button.dataset.sort === mode);
+        button.setAttribute('aria-pressed', String(button.dataset.sort === mode));
+      }
+    };
+
+    paint(active);
+    // 页面上来的已经是默认顺序，只有读者之前选过别的才需要重排
+    const initialList = getList();
+    if (initialList && active !== fallback) applySort(initialList, active);
+
+    // 目标节点是后生成的（归档页切到列表视图）时，页面会派发 resort，
+    // 这里补排一次，否则读者上次选的「按标题」要点了按钮才生效
+    bar.addEventListener('resort', () => {
+      const target = getList();
+      if (target) applySort(target, active);
+    });
+
+    bar.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-sort]');
+      if (!button) return;
+      const mode = button.dataset.sort;
+      active = mode;
+      paint(mode);
+      const target = getList();
+      if (target) applySort(target, mode);
+      saveSort(storageKey, mode);
+    });
+  }
+</script>

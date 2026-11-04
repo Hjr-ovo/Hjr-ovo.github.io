@@ -15,6 +15,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import TableOfContents from '../../components/TableOfContents.astro';
 import { formatDate, isoDate } from '../../utils/format-date';
 import { findRelated } from '../../utils/related-posts';
+import { getSeriesNav } from '../../utils/series';
 import { countWords, formatWords, withWordCount } from '../../utils/word-count';
 
 export async function getStaticPaths() {
@@ -36,12 +37,26 @@ const words = countWords(post.body ?? '');
 
 // 相关文章：拿全部已发布文章来比，规则见 utils/related-posts.ts
 const allPosts = await getCollection('posts', ({ data }) => !data.draft);
-const related = findRelated(post, allPosts);
+
+// 系列导航：属于某个系列、且系列不止一篇时才有值，否则为 null（整块不渲染）
+const seriesNav = getSeriesNav(post, allPosts);
+
+// 同系列的其余文章已经在上面的系列目录里列全了，再让「相关文章」推一遍
+// 就是同一个列表换个标题出现两次。这里把它们排除掉（自己留着，
+// findRelated 要靠它算标签/分类交集）。
+const sameSeries = new Set(
+  (seriesNav ? seriesNav.members : [])
+    .map((item) => item.id)
+    .filter((id) => id !== post.id),
+);
+const others = allPosts.filter((item) => !sameSeries.has(item.id));
+
+const related = findRelated(post, others);
 
 // 没有标签/分类交集时（本站现在只有一篇真实文章，就属于这种情况），
 // 退回「继续阅读」列出最新几篇：读到最后总得给人一条路，而不是空着。
 // 标题会跟着换，不冒充「相关」。
-const latest = allPosts
+const latest = others
   .filter((item) => item.id !== post.id)
   .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
   .slice(0, 3);
@@ -94,6 +109,55 @@ const moreTitle = related.length > 0 ? '相关文章' : '继续阅读';
 
       <TableOfContents headings={headings} />
     </div>
+
+    {/* 系列导航：让成组的连载能顺着往下读，不用回分类页翻。
+        放在相关文章之前 —— 它和当前文章是同一套内容，关系更近 */}
+    {seriesNav && (
+      <aside class="series-nav" data-pagefind-ignore>
+        <p class="series-head">
+          <span class="series-tag">{seriesNav.name}</span>
+          <span class="series-count">
+            本篇 {seriesNav.index}/{seriesNav.total}
+          </span>
+        </p>
+
+        {/* 首尾篇没有上一篇/下一篇，对应用空 span 占位，
+            这样两张卡片的左右位置不会因为缺一个而错位 */}
+        <div class="series-pager">
+          {seriesNav.prev ? (
+            <a class="series-step" href={`/posts/${seriesNav.prev.id}/`}>
+              <span class="series-dir">← 上一篇</span>
+              <span class="series-title">{seriesNav.prev.data.title}</span>
+            </a>
+          ) : (
+            <span class="series-step is-empty" aria-hidden="true" />
+          )}
+
+          {seriesNav.next ? (
+            <a class="series-step next" href={`/posts/${seriesNav.next.id}/`}>
+              <span class="series-dir">下一篇 →</span>
+              <span class="series-title">{seriesNav.next.data.title}</span>
+            </a>
+          ) : (
+            <span class="series-step is-empty" aria-hidden="true" />
+          )}
+        </div>
+
+        {/* 折叠目录：默认收起，想跳章的人自己展开，不占正文版面 */}
+        <details class="series-toc">
+          <summary>全部 {seriesNav.total} 篇</summary>
+          <ol>
+            {seriesNav.members.map((member, i) => (
+              <li class={member.id === post.id ? 'is-current' : ''}>
+                <a href={`/posts/${member.id}/`}>
+                  {i + 1}. {member.data.title}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </details>
+      </aside>
+    )}
 
     {/* 相关文章 / 继续阅读。规则算不出交集时退回最新几篇，标题跟着换 */}
     {more.length > 0 && (

@@ -1565,7 +1565,12 @@ article img {
 .archive-item {
   display: flex;
   align-items: baseline;
-  gap: 0.75rem;
+  /* 两轴分开写：列间距沿用 0.75rem；行间距要小得多，
+     否则标签组换行之后中间空出一大块 */
+  column-gap: 0.75rem;
+  row-gap: 0.2rem;
+  /* 允许标签组整行换到下面去（见 .archive-link 的 min-width） */
+  flex-wrap: wrap;
   /* 左右 0.55rem 内边距 + 等量负外边距：给悬停底色留出呼吸空间，
      而文字的相对位置一点不变（下面 .timeline-items 的缩进不用动）。
      只往右伸 0.55rem，页面容器 .wrap 有 1.25rem 内边距，不会顶出屏幕。 */
@@ -1605,9 +1610,11 @@ article img {
 
 .archive-link {
   flex: 1 1 auto;
-  /* ⚠️ 必须给 min-width:0：flex 项默认 min-width:auto，长标题不肯收缩，
-     会把右边那组胶囊顶出容器（窄屏上表现为横向滚动条）。 */
-  min-width: 0;
+  /* min-width:auto 是 flex 项的默认值，长标题不肯收缩会把右边胶囊顶出容器
+     （窄屏表现为横向滚动条）。但不能压到 0 —— 压到 0 时标签多的行会把
+     标题挤成两行（「第1章 软件和软」/「件工程」），标题是一行里最该完整
+     读的东西。给 12rem 的下限：不够就轮到标签组整行往下让 */
+  min-width: 12rem;
   color: var(--ink);
   text-decoration: none;
 }
@@ -1627,8 +1634,12 @@ article img {
   justify-content: flex-end;
   align-items: baseline;
   gap: 0.35rem;
-  /* 上限 55%：标签再多也不至于把标题挤成一条竖线 */
-  max-width: 55%;
+  /* 换到第二行时也贴右端，和标题的右端对齐 */
+  margin-left: auto;
+  /* 原来这里卡 55%，是在没有 flex-wrap 的年代防止标签把标题挤成竖线。
+     现在标题有 12rem 下限、放不下时整组会换行，再用百分比硬压只会让
+     标签组自己内部再折一次 —— 放开到 100%，一行能放几个就放几个 */
+  max-width: 100%;
 }
 
 /* ---------- 空状态 ---------- */
@@ -2011,5 +2022,276 @@ article img {
     order: 2;
     margin-left: auto;
     max-width: 75%;
+  }
+}
+
+/* ============================================================
+   系列与排序（2026-11-04）
+   ============================================================ */
+
+/* 列表卡片上的系列标记。用强调色的浅底胶囊，和分类/标签的胶囊在同一条视觉线上，
+   但颜色不同 —— 读者一眼能分出「这是系列的第几篇」和「这属于哪个分类」 */
+.series-tag {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.74rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+}
+
+/* ---------- 排序栏 ---------- */
+.sort-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  margin: 1rem 0 1.1rem;
+}
+
+/* button 默认不继承字体，两处（排序栏 / 视图切换）都必须显式写，
+   否则会退回浏览器的宋体按钮字，和全站字体打架 */
+.sort-btn {
+  padding: 0.28rem 0.7rem;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.sort-btn:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.sort-btn.is-active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ---------- 归档页工具栏 ---------- */
+.archive-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin: 1rem 0 1.1rem;
+}
+
+.archive-toolbar .sort-bar {
+  flex: 1 1 auto;
+  margin: 0;
+}
+
+/* 时间轴视图下排序没有意义（排了会打散月份分组），整条藏起来。
+   用属性选择器而不是 JS 增删 class，少一处状态要同步 */
+.archive-toolbar[data-view='timeline'] .sort-bar {
+  display: none;
+}
+
+.view-switch {
+  display: flex;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.view-switch button {
+  padding: 0.3rem 0.8rem;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.view-switch button.is-active {
+  /* 选中项反色：深底亮字（浅色主题）/ 亮底深字（深色主题），两种主题都成立 */
+  color: var(--bg);
+  background: var(--accent);
+}
+
+/* ---------- 归档页的扁平列表 ---------- */
+.flat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* 和时间轴里的条目共用 .archive-item 的排版，只换掉「卡片式」的那部分：
+   扁平列表是一整列，用分隔线而不是浮起的卡片 */
+.flat-list .archive-item {
+  margin: 0;
+  padding: 0.55rem;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.flat-list .archive-item:last-child {
+  border-bottom: 0;
+}
+
+/* 悬停时只留底色，不做位移 —— 列表里每一行都往上飘一下会晃眼 */
+.flat-list .archive-item:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* 完整日期（2026-11-03）比时间轴里的「月-日」宽，给个下限让标题左端对得齐 */
+.flat-list .archive-date {
+  min-width: 5.4rem;
+}
+
+/* ---------- 文章页的系列导航 ---------- */
+.series-nav {
+  margin: 2.5rem 0 0;
+  padding: 1.1rem 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.series-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.9rem;
+}
+
+/* 这里的是行内标签，不需要卡片上那点下外边距 */
+.series-head .series-tag {
+  margin-bottom: 0;
+}
+
+.series-count {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.series-pager {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+}
+
+.series-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-decoration: none;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.series-step:hover {
+  border-color: var(--line-strong);
+  background: var(--bg);
+}
+
+.series-step.next {
+  text-align: right;
+}
+
+/* 首尾篇的占位：虚线框，看得见位置但点不了，卡片左右不会错位 */
+.series-step.is-empty {
+  border-style: dashed;
+  border-color: var(--line);
+}
+
+.series-dir {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.series-title {
+  overflow: hidden;
+  font-size: 0.9rem;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.series-toc {
+  margin-top: 0.9rem;
+  font-size: 0.86rem;
+}
+
+.series-toc summary {
+  font-size: 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.series-toc summary:hover {
+  color: var(--accent);
+}
+
+.series-toc ol {
+  margin: 0.6rem 0 0;
+  padding-left: 1.4rem;
+  color: var(--faint);
+}
+
+.series-toc li {
+  margin: 0.25rem 0;
+}
+
+.series-toc a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.series-toc a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.series-toc .is-current a {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* 窄屏：上一篇/下一篇改成上下两行，右对齐也跟着改左对齐；
+   占位的空框直接隐藏，否则多出一块没内容的虚线框 */
+@media (max-width: 520px) {
+  .series-pager {
+    grid-template-columns: 1fr;
+  }
+
+  .series-step.next {
+    text-align: left;
+  }
+
+  .series-step.is-empty {
+    display: none;
+  }
+
+  .archive-toolbar {
+    justify-content: space-between;
+  }
+
+  .flat-list .archive-date {
+    min-width: 4.6rem;
   }
 }

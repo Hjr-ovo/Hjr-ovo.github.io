@@ -19,6 +19,7 @@ import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { isoDate } from '../../utils/format-date';
 import { withWordCount } from '../../utils/word-count';
+import SortBar from '../../components/SortBar.astro';
 
 const posts = withWordCount(
   (await getCollection('posts', ({ data }) => !data.draft)).sort(
@@ -44,6 +45,15 @@ for (const post of posts) {
     months.push({ key, label, posts: [post] });
   }
 }
+
+// 列表视图的排序选项。没有「按系列」——归档页本来就是时间性质的，
+// 系列在这里会被月份打散，给一个排不出来的选项只会让人困惑。
+const SORT_OPTIONS = [
+  { value: 'dateDesc', label: '最新在前' },
+  { value: 'dateAsc', label: '最早在前' },
+  { value: 'title', label: '按标题' },
+  { value: 'words', label: '按字数' },
+];
 ---
 
 <BaseLayout title="全部文章" description="所有文章的归档，按月份排在时间轴上。">
@@ -52,12 +62,30 @@ for (const post of posts) {
   <h1>全部文章</h1>
   <p class="page-desc">共 {posts.length} 篇。</p>
 
+  {posts.length > 0 && (
+    <div class="archive-toolbar" data-view="timeline" data-toolbar>
+      <SortBar
+        target="#flat-list"
+        storageKey="sort:archive"
+        initial="dateDesc"
+        options={SORT_OPTIONS}
+      />
+      <div class="view-switch" role="group" aria-label="显示方式">
+        <button type="button" data-view-btn="timeline" class="is-active">
+          时间轴
+        </button>
+        <button type="button" data-view-btn="list">列表</button>
+      </div>
+    </div>
+  )}
+
   {posts.length === 0 ? (
     <div class="empty">
       <p>还没有文章。</p>
     </div>
   ) : (
-    <ol class="timeline">
+    <>
+    <ol class="timeline" data-timeline>
       {months.map((month) => (
         <li class="timeline-month">
           {/* 圆点是纯装饰，读屏软件跳过；月份标签才是这一节点的名字 */}
@@ -65,7 +93,12 @@ for (const post of posts) {
           <h2 class="timeline-label">{month.label}</h2>
           <ul class="timeline-items">
             {month.posts.map((post) => (
-              <li class="archive-item">
+              <li
+                class="archive-item"
+                data-date={isoDate(post.data.pubDate)}
+                data-title={post.data.title}
+                data-words={post.words}
+              >
                 <time class="archive-date" datetime={isoDate(post.data.pubDate)}>
                   {monthDay(post.data.pubDate)}
                 </time>
@@ -99,5 +132,80 @@ for (const post of posts) {
         </li>
       ))}
     </ol>
+
+    {/* 列表视图的容器，内容由下面的脚本从时间轴条目克隆过来。
+        不在这里再渲染一遍的原因：同一批文章会在 HTML 里出现两次，
+        页面体积翻倍，而且以后改条目结构还得记住改两处 */}
+    <ol class="flat-list" id="flat-list" hidden></ol>
+    </>
   )}
 </BaseLayout>
+
+<script>
+  // 时间轴 / 列表 视图切换
+  //
+  // 时间轴是服务端渲染好的，切到列表时**克隆**一份条目出来重排 ——
+  // 用克隆而不是搬走原节点，是为了切回时间轴时能原样还原（月份分组、缩进都在）。
+  // 克隆只发生在内存里，页面的 HTML 不会因此变大。
+  const toolbar = document.querySelector('[data-toolbar]');
+  const timeline = document.querySelector('[data-timeline]');
+  const flat = document.getElementById('flat-list');
+
+  if (toolbar && timeline && flat) {
+    const VIEW_KEY = 'view:archive';
+    let built = false;
+
+    const buildFlat = () => {
+      if (built) return;
+      for (const item of timeline.querySelectorAll('.archive-item')) {
+        const clone = item.cloneNode(true);
+        // 时间轴里的日期只写「月-日」（月份已经写在节点标签上）；
+        // 扁平列表没有月份节点，得把完整日期补回去，否则分不清年份
+        const date = clone.querySelector('.archive-date');
+        if (date && item.dataset.date) {
+          date.textContent = item.dataset.date;
+          date.setAttribute('datetime', item.dataset.date);
+        }
+        flat.append(clone);
+      }
+      built = true;
+      // 列表是刚生成的，排序栏绑定的还是空容器，通知它补排一次
+      document
+        .querySelector('[data-sort-bar]')
+        ?.dispatchEvent(new Event('resort'));
+    };
+
+    const setView = (view) => {
+      toolbar.dataset.view = view;
+      for (const button of toolbar.querySelectorAll('[data-view-btn]')) {
+        const on = button.dataset.viewBtn === view;
+        button.classList.toggle('is-active', on);
+        button.setAttribute('aria-pressed', String(on));
+      }
+
+      const isList = view === 'list';
+      if (isList) buildFlat();
+      flat.hidden = !isList;
+      timeline.hidden = isList;
+
+      try {
+        localStorage.setItem(VIEW_KEY, view);
+      } catch {
+        /* 隐私模式下记不住，不影响切换 */
+      }
+    };
+
+    toolbar.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-view-btn]');
+      if (button) setView(button.dataset.viewBtn);
+    });
+
+    let savedView = null;
+    try {
+      savedView = localStorage.getItem(VIEW_KEY);
+    } catch {
+      /* 同上 */
+    }
+    setView(savedView === 'list' ? 'list' : 'timeline');
+  }
+</script>

@@ -15,18 +15,24 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import { SITE } from '../consts';
 import { formatDate, isoDate } from '../utils/format-date';
 import { withWordCount } from '../utils/word-count';
+import { sortBySeries, takeWholeSeries, buildSeriesPositions } from '../utils/series';
 
 // 首页放几篇。想改就改这个数字，下面的按钮和提示文字会自己跟着变
 const RECENT_COUNT = 10;
 
-// withWordCount 顺手补上 words / wordLabel 两个字段，卡片里直接用
-const posts = withWordCount(
-  (await getCollection('posts', ({ data }) => !data.draft)).sort(
-    (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
-  ),
-);
+// 排序交给 sortBySeries：同系列聚成一组、组内按章节号。
+// 不按纯日期排的原因见 utils/series.ts 开头。
+const sorted = sortBySeries(await getCollection('posts', ({ data }) => !data.draft));
 
-const recentPosts = posts.slice(0, RECENT_COUNT);
+// 系列位置只算这一次，卡片上的「2/4」和文章页的上一篇/下一篇共用同一份口径
+const seriesPositions = buildSeriesPositions(sorted);
+
+// withWordCount 顺手补上 words / wordLabel 两个字段，卡片里直接用
+const posts = withWordCount(sorted);
+
+// 最近 10 篇。用 takeWholeSeries 而不是直接 slice ——
+// 第 10 篇如果是一个系列的第 2 章，切在这里读者会看到「2/4」却找不到其余三章
+const recentPosts = withWordCount(takeWholeSeries(sorted, RECENT_COUNT));
 
 // 多出来的篇数。为 0 时整块「查看更多」不渲染 —— 文章还没攒够，按钮没意义
 const restCount = posts.length - recentPosts.length;
@@ -46,8 +52,18 @@ const restCount = posts.length - recentPosts.length;
     </div>
   ) : (
     <ul class="post-list">
-      {recentPosts.map((post) => (
+      {recentPosts.map((post) => {
+        const series = seriesPositions.get(post.id);
+        return (
         <li class="post-item">
+          {/* 系列标记放在标题上方：它回答的是「这篇属于哪一套」，
+              读者扫列表时靠它把成组的几篇认出来。不属于系列就不渲染 */}
+          {series && (
+            <span class="series-tag">
+              {series.name} · {series.index}/{series.total}
+            </span>
+          )}
+
           {/* 标题放最前 —— 读者扫列表时先看的就是它，
               日期属于"决定要不要点进去"之后才关心的信息，排标题下面 */}
           <h2>
@@ -86,7 +102,8 @@ const restCount = posts.length - recentPosts.length;
             ))}
           </div>
         </li>
-      ))}
+        );
+      })}
     </ul>
   )}
 

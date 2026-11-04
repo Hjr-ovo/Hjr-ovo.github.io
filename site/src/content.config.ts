@@ -37,6 +37,21 @@ const postsSchema = z.object({
   tags: z.array(z.string()).default([]),
   // draft: true 的文章不会出现在列表和页面里，方便"写了但先不发"
   draft: z.boolean().default(false),
+
+  // ---- 系列（2026-11-04 加）----
+  //
+  // 用途：一篇文章常常是某个序列里的一章（软件工程笔记的第 1 章、2-1 章……），
+  // 这些章的发布日期往往只差一两天甚至同一天，按日期排会乱。
+  //
+  // 规则（实现见 utils/series.ts）：
+  //   series      系列名，同名的算一组；
+  //   seriesOrder 组内序号，小的在前。
+  //
+  // 为什么两个都选填：系列是「额外的组织手段」，不该变成发文门槛。
+  // 只写 series 不写 seriesOrder 时，组内退回按日期排（等于没排序但不报错）；
+  // 只写 seriesOrder 没 series 时，序号被忽略——没有归属就谈不上组内次序。
+  series: z.string().optional(),
+  seriesOrder: z.number().int().optional(),
 });
 
 const posts = defineCollection({

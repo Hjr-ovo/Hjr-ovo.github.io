@@ -12,9 +12,14 @@ import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { formatDate, isoDate } from '../../utils/format-date';
 import { withWordCount } from '../../utils/word-count';
+import { sortBySeries, buildSeriesPositions } from '../../utils/series';
 
 export async function getStaticPaths() {
   const posts = await getCollection('posts', ({ data }) => !data.draft);
+
+  // 系列位置按**全站**文章算，不能只按当前标签下的几篇算 ——
+  // 否则同一个系列在标签页显示「1/2」、在文章页显示「2/4」，自相矛盾
+  const seriesPositions = buildSeriesPositions(posts);
 
   // 标签 → 文章列表。同一标签在同一个文件里重复出现只收一次
   const groups = new Map<string, typeof posts>();
@@ -28,15 +33,14 @@ export async function getStaticPaths() {
   return [...groups.entries()].map(([tag, list]) => ({
     params: { tag },
     props: {
-      // 按发布日期倒序，与首页、分类页口径一致；withWordCount 补字数
-      posts: withWordCount(
-        list.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()),
-      ),
+      // 系列感知排序，与首页口径一致；withWordCount 补字数
+      posts: withWordCount(sortBySeries(list)),
+      seriesPositions,
     },
   }));
 }
 
-const { posts } = Astro.props;
+const { posts, seriesPositions } = Astro.props;
 const tag = Astro.params.tag;
 ---
 
@@ -49,8 +53,15 @@ const tag = Astro.params.tag;
   </header>
 
   <ul class="post-list">
-    {posts.map((post) => (
+    {posts.map((post) => {
+      const series = seriesPositions.get(post.id);
+      return (
       <li class="post-item">
+        {series && (
+          <span class="series-tag">
+            {series.name} · {series.index}/{series.total}
+          </span>
+        )}
         <h2>
           <a href={`/posts/${post.id}/`}>{post.data.title}</a>
         </h2>
@@ -80,6 +91,7 @@ const tag = Astro.params.tag;
           ))}
         </div>
       </li>
-    ))}
+      );
+    })}
   </ul>
 </BaseLayout>
