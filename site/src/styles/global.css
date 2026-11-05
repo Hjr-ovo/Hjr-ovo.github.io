@@ -1584,15 +1584,14 @@ article img {
   min-width: 0;
 }
 
-/* 一行 = 月日 + 标题 + 分类/标签。日期等宽数字，标题长短不一时右端才对得齐 */
+/* 一行 = 月日 + 字数 + 标题。日期等宽数字，标题长短不一时右端才对得齐。
+   2026-11-05 起这一行不再放分类/标签：归档页只负责「按时间找文章」 */
 .archive-item {
   display: flex;
   align-items: baseline;
-  /* 两轴分开写：列间距沿用 0.75rem；行间距要小得多，
-     否则标签组换行之后中间空出一大块 */
+  /* 两轴分开写：列间距沿用 0.75rem；行间距要小得多 */
   column-gap: 0.75rem;
   row-gap: 0.2rem;
-  /* 允许标签组整行换到下面去（见 .archive-link 的 min-width） */
   flex-wrap: wrap;
   /* 左右 0.55rem 内边距 + 等量负外边距：给悬停底色留出呼吸空间，
      而文字的相对位置一点不变（下面 .timeline-items 的缩进不用动）。
@@ -1606,7 +1605,7 @@ article img {
     transform 0.16s ease;
 }
 
-/* 悬停：整行（月日 + 标题 + 胶囊）一起抬起。位移只给 1px ——
+/* 悬停：整行（月日 + 字数 + 标题）一起抬起。位移只给 1px ——
    行与行挨得近，抬 2px 会让上下两行看起来在打架。 */
 .archive-item:hover {
   background: var(--bg-card);
@@ -1639,12 +1638,13 @@ article img {
 }
 
 .archive-link {
-  flex: 1 1 auto;
-  /* min-width:auto 是 flex 项的默认值，长标题不肯收缩会把右边胶囊顶出容器
-     （窄屏表现为横向滚动条）。但不能压到 0 —— 压到 0 时标签多的行会把
-     标题挤成两行（「第1章 软件和软」/「件工程」），标题是一行里最该完整
-     读的东西。给 12rem 的下限：不够就轮到标签组整行往下让 */
-  min-width: 12rem;
+  /* 基准宽度给 0、再靠 flex-grow 吃满剩下的空间。
+     不能用 flex-basis: auto —— 那样长标题的「理想宽度」放不下时
+     整块会被挤到下一行（一行里有的折、有的不折，参差不齐）；
+     基准 0 它就不会换行，只在内部折行 */
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: break-word;
   color: var(--ink);
   text-decoration: none;
 }
@@ -1652,24 +1652,6 @@ article img {
 .archive-link:hover {
   color: var(--accent);
   text-decoration: underline;
-}
-
-/* 右侧胶囊组：分类（强调色）+ 标签（灰色），与首页、文章页同一套配色。
-   包一个容器是为了让整组右对齐、组内换行（标签多时），
-   而不是让每个胶囊各占一个 flex 项去和标题抢空间。 */
-.archive-meta {
-  flex: 0 0 auto;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: baseline;
-  gap: 0.35rem;
-  /* 换到第二行时也贴右端，和标题的右端对齐 */
-  margin-left: auto;
-  /* 原来这里卡 55%，是在没有 flex-wrap 的年代防止标签把标题挤成竖线。
-     现在标题有 12rem 下限、放不下时整组会换行，再用百分比硬压只会让
-     标签组自己内部再折一次 —— 放开到 100%，一行能放几个就放几个 */
-  max-width: 100%;
 }
 
 /* ---------- 空状态 ---------- */
@@ -2035,23 +2017,12 @@ article img {
   }
 }
 
-/* 归档页：窄屏改成「月日 + 分类/标签」一行、标题单独一行。
-   原来三者挤在一行，长标题会把胶囊顶到很远的位置，日期也对不齐。 */
+/* 归档页：窄屏只压缩列间距，标题该换行就换行。
+   2026-11-05 去掉分类/标签后，一行只剩「月日 + 字数 + 标题」，
+   不需要再用 order 重排 */
 @media (max-width: 520px) {
   .archive-item {
-    flex-wrap: wrap;
-    gap: 0.1rem 0.6rem;
-  }
-
-  .archive-link {
-    order: 3;
-    flex: 1 1 100%;
-  }
-
-  .archive-meta {
-    order: 2;
-    margin-left: auto;
-    max-width: 75%;
+    column-gap: 0.6rem;
   }
 }
 
