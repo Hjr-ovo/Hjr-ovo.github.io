@@ -16,9 +16,19 @@
 //   1. 同一「天」的文章共用左侧日期 —— 四篇软件工程笔记同一天发布，
 //      每行都重复一遍 11-03 既冗余又让人误以为是四天。现在一天一组，
 //      日期只在组首出现一次，组内各行的字数/标题左端仍然对齐。
-//   2. 顶部加吸顶的月份导航。文章攒到几十篇、时间跨度几年以后，
+//   2. 顶部加月份导航。文章攒到几十篇、时间跨度几年以后，
 //      靠滚轮找「两年前那篇」不现实，得能一下跳过去。
 //      2026-11-04 同时砍掉了「列表视图」—— 归档页只保留时间轴。
+//
+// 2026-11-05 改成「胶片窗口」：
+//   整条时间轴关进一个定高窗口（.film），滚轮先翻窗口、窗口到底才交给页面。
+//   每个月是一张浮起来的卡片，卡片之间留缝，上下两道渐隐按「那一侧还有没有
+//   内容」显隐，逐帧按离窗口中心的距离调整卡片的清晰度/缩放 —— 合起来就是
+//   胶片过片的手感。
+//   为什么这么做：几十篇铺满整页时，读者既看不出还有多少，也没法在一个
+//   固定视野里对位比较（同名同类的文章往往隔着几个月）。
+//   为什么渐隐而不是留滚动条：窗口本身已经说明了「这是可以翻的东西」，
+//   道边渐隐比一条灰滑块更接近「胶片在片门里走」的观感。
 
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
@@ -83,112 +93,134 @@ for (const post of posts) {
   <h1>全部文章</h1>
   <p class="page-desc">共 {posts.length} 篇。</p>
 
-  {/* 月份导航：只有一个月时没得跳，整条不渲染。
-      每条都是普通锚点链接 —— 关掉 JS 也点得动，只是没有平滑滚动和高亮 */}
-  {months.length > 1 && (
-    <nav class="tl-jump" data-jump aria-label="按月份跳转">
-      <ul class="tl-jump-list" data-jump-list>
-        {months.map((month) => (
-          <li>
-            <a
-              class="tl-jump-chip"
-              href={`#m-${month.key}`}
-              data-jump-to={`m-${month.key}`}
-            >
-              {month.short}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </nav>
-  )}
-
   {posts.length === 0 ? (
     <div class="empty">
       <p>还没有文章。</p>
     </div>
   ) : (
-    <ol class="timeline">
-      {months.map((month) => (
-        <li class="timeline-month" id={`m-${month.key}`}>
-          {/* 圆点是纯装饰，读屏软件跳过；月份标签才是这一节点的名字 */}
-          <span class="timeline-dot" aria-hidden="true" />
-          <h2 class="timeline-label">{month.label}</h2>
+    <div class="film" data-film>
+      {/* 月份导航：只有一个月时没得跳，整条不渲染。
+          每条都是普通锚点链接 —— 关掉 JS 也点得动，只是没有平滑滚动和高亮 */}
+      {months.length > 1 && (
+        <nav class="tl-jump" aria-label="按月份跳转">
+          <ul class="tl-jump-list" data-jump-list>
+            {months.map((month) => (
+              <li>
+                <a
+                  class="tl-jump-chip"
+                  href={`#m-${month.key}`}
+                  data-jump-to={`m-${month.key}`}
+                >
+                  {month.short}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
 
-          <ol class="timeline-days">
-            {month.days.map((day) => (
-              <li class="timeline-day">
-                <time class="archive-date" datetime={day.key}>
-                  {day.monthDay}
-                </time>
+      <div class="film-body">
+        <div class="film-scroll" data-film-scroll>
+          <ol class="timeline">
+            {months.map((month) => (
+              <li class="timeline-month" id={`m-${month.key}`}>
+                {/* 圆点是纯装饰，读屏软件跳过；月份标签才是这一节点的名字 */}
+                <span class="timeline-dot" aria-hidden="true" />
+                <h2 class="timeline-label">{month.label}</h2>
 
-                <ul class="timeline-items">
-                  {day.posts.map((post) => (
-                    <li class="archive-item">
-                      {/* 字数紧跟在日期后面：一行里「什么时候发的、多长」读起来是连贯的。
-                          放最右侧会被标签组挤走，放标题后面又会把标题戳断。
-                          日期已经由整组共用，这里只留字数。 */}
-                      {post.wordLabel && (
-                        <span class="archive-words">{post.wordLabel}</span>
-                      )}
-                      <a class="archive-link" href={`/posts/${post.id}/`}>
-                        {post.data.title}
-                      </a>
-                      {/* 右侧一组胶囊：分类用强调色、标签用灰色，与首页 / 文章页同一套配色。
-                          标签数量有可能很长（算法题尤其），所以整组允许换行，不挤标题。 */}
-                      {(post.data.categories.length > 0 || post.data.tags.length > 0) && (
-                        <span class="archive-meta">
-                          {post.data.categories.map((category) => (
-                            <a class="tag" href={`/categories/${category}/`}>
-                              {category}
+                <ol class="timeline-days">
+                  {month.days.map((day) => (
+                    <li class="timeline-day">
+                      <time class="archive-date" datetime={day.key}>
+                        {day.monthDay}
+                      </time>
+
+                      <ul class="timeline-items">
+                        {day.posts.map((post) => (
+                          <li class="archive-item">
+                            {/* 字数紧跟在日期后面：一行里「什么时候发的、多长」读起来是连贯的。
+                                放最右侧会被标签组挤走，放标题后面又会把标题戳断。
+                                日期已经由整组共用，这里只留字数。 */}
+                            {post.wordLabel && (
+                              <span class="archive-words">{post.wordLabel}</span>
+                            )}
+                            <a class="archive-link" href={`/posts/${post.id}/`}>
+                              {post.data.title}
                             </a>
-                          ))}
-                          {post.data.tags.map((tag) => (
-                            <a class="tag muted" href={`/tags/${tag}/`}>
-                              {tag}
-                            </a>
-                          ))}
-                        </span>
-                      )}
+                            {/* 右侧一组胶囊：分类用强调色、标签用灰色，与首页 / 文章页同一套配色。
+                                标签数量有可能很长（算法题尤其），所以整组允许换行，不挤标题。 */}
+                            {(post.data.categories.length > 0 ||
+                              post.data.tags.length > 0) && (
+                              <span class="archive-meta">
+                                {post.data.categories.map((category) => (
+                                  <a class="tag" href={`/categories/${category}/`}>
+                                    {category}
+                                  </a>
+                                ))}
+                                {post.data.tags.map((tag) => (
+                                  <a class="tag muted" href={`/tags/${tag}/`}>
+                                    {tag}
+                                  </a>
+                                ))}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
                     </li>
                   ))}
-                </ul>
+                </ol>
               </li>
             ))}
           </ol>
-        </li>
-      ))}
-    </ol>
+        </div>
+
+        {/* 两道渐隐叠在滚动区上面，显隐由脚本按滚动位置切 */}
+        <span class="film-fade film-fade-top" aria-hidden="true" />
+        <span class="film-fade film-fade-bottom" aria-hidden="true" />
+      </div>
+    </div>
   )}
 </BaseLayout>
 
 <script>
-  // 月份导航：点一下滚到那个月，滚动时把当前所在月份标出来。
+  // 胶片窗口（2026-11-05）
   //
-  // 三件事要注意：
-  //   1. 导航是吸顶的，判断「某个月份到了没」得把它占的高度算进去，
-  //      否则月份标题刚好被导航盖住的那一刻还会被判成「还没到」；
-  //   2. scrollIntoView 尊重 CSS 的 scroll-margin-top，所以月份节点上
-  //      留了和导航等高的上边距（见 global.css）；
-  //   3. 开了「减少动态效果」的人直接跳，不做平滑滚动。
-  const nav = document.querySelector('[data-jump]');
+  // 三件事：
+  //   1. 上下渐隐只在那一侧还有内容时出现（滚到顶没有上沿、滚到底没有下沿）；
+  //   2. 每篇按它离窗口上下沿的距离算一个 --film-k（1 = 在两门之间、完全清楚；
+  //      0 = 正贴着窗口边），CSS 拿它控制透明度和缩放 —— 就是过片时
+  //      「中间清楚、进片门就淡出」的观感；
+  //   3. 月份药丸的高亮改成相对窗口算 —— 现在滚动的是窗口，不是页面。
+  //
+  // 为什么不用 IntersectionObserver：需要的是「离中心多远」这个连续值，
+  // 观察器只能给「进没进视口」的离散结果。条目只有几十条，每帧批量读
+  // rect 再批量写自定义属性，代价可以忽略（超过 200 条就不算了，见 depth）。
+  const film = document.querySelector('[data-film]');
+  const scroller = document.querySelector('[data-film-scroll]');
   const strip = document.querySelector('[data-jump-list]');
 
-  if (nav && strip) {
-    const months = [...strip.querySelectorAll('[data-jump-to]')]
-      .map((node) => {
-        const chip = node as HTMLElement;
-        const target = document.getElementById(chip.dataset.jumpTo || '');
-        return target ? { chip, target } : null;
-      })
-      .filter((item): item is { chip: HTMLElement; target: HTMLElement } => item !== null);
-
+  if (film && scroller) {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let current: HTMLElement | null = null;
+    const items = [...scroller.querySelectorAll('.archive-item')];
+    // 条目太多就别逐帧算了：几百个元素每帧重算样式会拖慢滚动。
+    // 那时卡片和渐隐已经足够表达「胶片」，不需要每个元素跟着调。
+    const depth = items.length <= 200 && !reduced.matches;
+
+    const chips = strip
+      ? [...strip.querySelectorAll('[data-jump-to]')]
+          .map((node) => {
+            const target = document.getElementById(node.dataset.jumpTo || '');
+            return target ? { chip: node, target } : null;
+          })
+          .filter((item) => item !== null)
+      : [];
+
+    let current = null;
 
     // 药丸多到装不下时横向滚动，把当前这个挪进视野（居中）。
-    // 不直接用 chip.scrollIntoView：那会连整个页面一起滚。
-    const reveal = (chip: HTMLElement) => {
+    // 不直接用 chip.scrollIntoView：那会连整个窗口一起滚。
+    const reveal = (chip) => {
       const left = chip.offsetLeft;
       const visible =
         left >= strip.scrollLeft &&
@@ -200,10 +232,10 @@ for (const post of posts) {
       });
     };
 
-    const mark = (chip: HTMLElement) => {
+    const mark = (chip) => {
       if (chip === current) return;
       current = chip;
-      for (const item of months) {
+      for (const item of chips) {
         const on = item.chip === chip;
         item.chip.classList.toggle('is-current', on);
         item.chip.setAttribute('aria-current', on ? 'true' : 'false');
@@ -211,44 +243,96 @@ for (const post of posts) {
       reveal(chip);
     };
 
+    // 哪一侧还有内容 —— 4px 的容差，免得像素级误差让渐隐一直闪
+    const syncEdges = () => {
+      const rest = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
+      film.classList.toggle('is-scrolled', scroller.scrollTop > 4);
+      film.classList.toggle('is-more', rest > 4);
+    };
+
+    // 窗口上下各留这么一段宽度的「片门」：卡片进到这条带里才淡出、缩小。
+    // 不能用「离窗口中线的距离」来算 —— 那样列表顶端静止时最上面那张
+    // 就已经半淡了（它离中线最远），一进页面就像坏了
+    const GATE = 48;
+
+    const syncDepth = () => {
+      if (!depth) return;
+      // 内容根本没超出窗口时不做淡出：最后一张卡正好贴着下沿，
+      // 按「片门」算法会被判成「滚出去的边缘」，可下面其实什么都没有
+      if (scroller.scrollHeight - scroller.clientHeight <= 4) {
+        for (const item of items) item.style.setProperty('--film-k', '1');
+        return;
+      }
+      const box = scroller.getBoundingClientRect();
+      for (const item of items) {
+        const rect = item.getBoundingClientRect();
+        const center = rect.top + rect.height / 2 - box.top;
+        // 离最近那道门的距离，换算成 0..1；在两门之间一律算 1（完全清楚）
+        const edge = Math.min(center, box.height - center);
+        const k = Math.max(0, Math.min(1, edge / GATE));
+        item.style.setProperty('--film-k', k.toFixed(3));
+      }
+    };
+
+    const syncActive = () => {
+      if (chips.length === 0) return;
+      const top = scroller.getBoundingClientRect().top;
+      let active = chips[0];
+      for (const item of chips) {
+        // 月份节点顶部越过窗口顶 1.5rem 才算「到了」：
+        // 阈值太小的话，标签还压在渐隐里就会被判成当前月，看着像提前跳了
+        if (item.target.getBoundingClientRect().top - top <= 24) active = item;
+        else break;
+      }
+      // 滚到底时最后一个月一定是「当前」—— 列表短的时候窗口只能滚几十像素，
+      // 最后那个月份标签永远走不到顶部，光靠上面的规则会让药丸一整段停在旧月份
+      const rest = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
+      if (rest <= 4) active = chips[chips.length - 1];
+      mark(active.chip);
+    };
+
     let queued = false;
     const sync = () => {
       queued = false;
-      // 吸顶时 top 正好是 0；没吸顶时是正数，用它切换底部那条分隔线
-      const rect = nav.getBoundingClientRect();
-      nav.classList.toggle('is-stuck', rect.top <= 0);
-
-      const line = rect.height + 24;
-      let active = months[0];
-      for (const item of months) {
-        if (item.target.getBoundingClientRect().top - line <= 0) active = item;
-        else break;
-      }
-      if (active) mark(active.chip);
+      syncEdges();
+      syncDepth();
+      syncActive();
     };
-
     const schedule = () => {
       if (queued) return;
       queued = true;
       requestAnimationFrame(sync);
     };
 
-    strip.addEventListener('click', (event) => {
-      const chip = (event.target as HTMLElement).closest('[data-jump-to]');
-      if (!(chip instanceof HTMLElement)) return;
-      const target = document.getElementById(chip.dataset.jumpTo || '');
-      if (!target) return;
-      event.preventDefault();
-      target.scrollIntoView({
-        behavior: reduced.matches ? 'auto' : 'smooth',
-        block: 'start',
+    if (strip) {
+      strip.addEventListener('click', (event) => {
+        const chip = event.target.closest('[data-jump-to]');
+        if (!chip) return;
+        const target = document.getElementById(chip.dataset.jumpTo || '');
+        if (!target) return;
+        event.preventDefault();
+        // 只滚窗口，不用 scrollIntoView：那个会连着页面一起滚，
+        // 结果药丸自己跟着往上跑，点完就找不着了（页面比窗口高时会这样）。
+        // 32 对应 CSS 里 .timeline-month 的 scroll-margin-top
+        const offset =
+          target.getBoundingClientRect().top -
+          scroller.getBoundingClientRect().top +
+          scroller.scrollTop -
+          32;
+        scroller.scrollTo({
+          top: Math.max(0, offset),
+          behavior: reduced.matches ? 'auto' : 'smooth',
+        });
+        // 地址栏跟着变，这种位置才分享得出去
+        history.replaceState(null, '', `#${chip.dataset.jumpTo}`);
       });
-      // 地址栏跟着变，这种位置才分享得出去
-      history.replaceState(null, '', `#${chip.dataset.jumpTo}`);
-    });
+    }
 
-    window.addEventListener('scroll', schedule, { passive: true });
+    scroller.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
+    // 带 #m-xxxx 直接进来的，浏览器要等布局稳定才把窗口滚到位，
+    // 所以 load 之后再同步一次，药丸高亮和渐隐才是对的
+    window.addEventListener('load', schedule);
     sync();
   }
 </script>

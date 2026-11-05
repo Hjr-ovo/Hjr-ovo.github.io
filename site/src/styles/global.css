@@ -1554,10 +1554,10 @@ article img {
   color: var(--ink);
 }
 
-/* 每个月节点：吸顶导航（.tl-jump）会盖住页面顶部，
-   跳过来时给节点留出和导航等高的上边距，否则月份标题正好被压在导航底下 */
+/* 每个月节点：跳过来时留出上端那道渐隐的高度（见 .film-fade），
+   否则月份标题正好落进渐隐区里，点完药丸像是没跳准 */
 .timeline-month {
-  scroll-margin-top: 4rem;
+  scroll-margin-top: 2rem;
 }
 
 /* 当月文章：一天一组。整组左缩进 1.5rem，和月份标签对齐挂在节点下 */
@@ -2113,26 +2113,16 @@ article img {
   background: var(--accent-soft);
 }
 
-/* ---------- 归档页的月份导航（2026-11-04） ----------
- * 吸顶在内容顶部：文章按年份铺开后，「翻到两年前那个月」不该靠滚轮。
- * 每条是一个真锚点，关掉 JS 也点得动；JS 只负责平滑滚动和当前月份高亮。 */
+/* ---------- 归档页的月份导航（2026-11-04，2026-11-05 起不再吸顶） ----------
+ * 文章按年份铺开后，「翻到两年前那个月」不该靠滚轮。
+ * 每条是一个真锚点，关掉 JS 也点得动；JS 只负责平滑滚动和当前月份高亮。
+ * 现在它是胶片窗口（.film）的标题栏 —— 窗口自己就是滚动容器，
+ * 导航不用再 sticky，跟着窗口顶部一起待着就行。 */
 
 .tl-jump {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  margin: 1.25rem -0.6rem 0.4rem;
-  padding: 0.5rem 0.6rem;
-  /* 必须不透明：吸顶后文章会从它后面划过去 */
-  background: var(--bg);
-  /* 分隔线平时透明，吸顶时才显形（JS 加 .is-stuck）——
-     否则顶端会凭空多出一条横线 */
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.16s ease;
-}
-
-.tl-jump.is-stuck {
-  border-bottom-color: var(--line);
+  margin: 0 0 0.5rem;
+  padding: 0 0 0.5rem;
+  border-bottom: 1px solid var(--line);
 }
 
 .tl-jump-list {
@@ -2177,6 +2167,122 @@ article img {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+/* ---------- 归档页的胶片窗口（2026-11-05） ----------
+ * 整条时间轴关进一个定高窗口，滚轮先翻窗口，窗口到底才交给页面。
+ * 上下两道渐隐按「那一侧还有没有内容」显隐（JS 加 .is-scrolled / .is-more），
+ * 滚动条是藏起来的 —— 渐隐和半截卡片就是「下面还有」的提示。
+ *
+ * ⚠️ 滚动容器必须是 .film-scroll 这一层，不能直接把 .timeline 变成滚动容器：
+ * 竖线是 .timeline::before 绝对定位画的，而滚动容器的定位包含块是它的
+ * **可视区**（padding box），线会只画满第一屏、往下翻就断在半空。
+ */
+
+.film {
+  position: relative;
+  margin: 1.1rem 0 2.5rem;
+  padding: 0.6rem 0.5rem 0.45rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+}
+
+/* 渐隐盖在它上面，所以它自己是定位参照 */
+.film-body {
+  position: relative;
+}
+
+/* 真正的滚动容器 */
+.film-scroll {
+  /* 内容短的时候窗口自动收成内容高度，超过才滚。
+     28rem ≈ 画面里能同时读到 6 行：再高就不像「窗口」，
+     再矮一屏两屏就得翻，找东西反而累 */
+  max-height: min(62vh, 28rem);
+  overflow-y: auto;
+  /* 留一点边：卡片阴影和过片时的位移不会被裁掉 */
+  padding: 0.2rem 0.4rem;
+  /* 藏滚动条：这是一条胶片，不是一个下拉框。
+     滚轮 / 触摸 / 方向键都还在，入口提示交给上下渐隐 */
+  scrollbar-width: none;
+}
+
+.film-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* 上下渐隐：盖在内容上，但不吃点击 */
+.film-fade {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 2.2rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+
+.film-fade-top {
+  top: 0;
+  background: linear-gradient(to bottom, var(--bg) 10%, transparent);
+}
+
+.film-fade-bottom {
+  bottom: 0;
+  background: linear-gradient(to top, var(--bg) 10%, transparent);
+}
+
+/* 滚下去过才有上沿渐隐；下面还有才有下沿渐隐 */
+.film.is-scrolled .film-fade-top,
+.film.is-more .film-fade-bottom {
+  opacity: 1;
+}
+
+/* 行 → 悬浮卡片：有间隙、有阴影，滚起来才有「东西在动」的实感。
+   原来那种裸行贴在一起，滚起来只像是文字在换行。 */
+.film .archive-item {
+  /* 出了窗口基线的负外边距收回，否则卡片会被滚出可视区 */
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  background: var(--bg-card);
+  border-radius: 10px;
+  /* 描边用内阴影而不是 border：border 会多占 2px 的高度，
+     左侧日期那 0.75rem 的对齐就白量了 */
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    var(--shadow-card);
+  transform-origin: center;
+  /* 过片：两道「片门」之间完全清楚，卡进上下 48px 才淡出并略微缩小。
+     --film-k 由页面脚本逐帧写入（1 = 清楚，0 = 贴着窗口边）；
+     没 JS 时按 1 算，等于「全都清楚」，不影响阅读 */
+  opacity: calc(0.55 + var(--film-k, 1) * 0.45);
+  transform: translateY(calc((1 - var(--film-k, 1)) * 2px))
+    scale(calc(0.985 + var(--film-k, 1) * 0.015));
+  transition:
+    background-color 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.12s ease,
+    opacity 0.12s ease;
+}
+
+/* 卡片之间留缝：同一天的多篇、跨天的、跨月的都要 */
+.film .archive-item + .archive-item {
+  margin-top: 0.28rem;
+}
+
+.film .timeline-day + .timeline-day {
+  margin-top: 0.28rem;
+}
+
+/* 悬停权重必须单独写一遍：.film .archive-item 和 .archive-item:hover
+   同为 (0,2,0)，靠源码顺序才压得住，悬停会失效 */
+.film .archive-item:hover {
+  box-shadow:
+    inset 0 0 0 1px var(--line-strong),
+    var(--shadow-card-hover);
+  transform: translateY(-2px) scale(1);
+  opacity: 1;
 }
 
 /* ---------- 文章页的系列导航 ---------- */
