@@ -104,6 +104,14 @@ function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
+// 今天的日期（YYYY-MM-DD）。不能用 toISOString()：那是 UTC，
+// 北京时间凌晨 0-8 点会算成前一天。
+function todayStr() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 const KIND_CN = { tags: '标签', categories: '分类' };
 
 // ---------- 分类 / 标签输入框（chips + 下拉候选 + 新建提示） ----------
@@ -1209,7 +1217,7 @@ function fillBatchForm(item) {
   $('gSlug').value = f.slug || '';
   $('gTitle').value = f.title || '';
   $('gDesc').value = f.desc || '';
-  $('gDate').value = f.date || '';
+  $('gDate').value = f.date || todayStr();
   TERMS.gCats.set(f.cats || []);
   TERMS.gTags.set(f.tags || []);
   $('gDraft').checked = f.draft === true;
@@ -1285,12 +1293,13 @@ async function handleFiles(fileList) {
       filename: file.name,
       raw: await file.text(),
       plan: null,
-      // 分析还没回来时先用文件名占位，队列里不至于是一片空白
+      // 分析还没回来时先用文件名占位，队列里不至于是一片空白。
+      // 日期直接先填今天：分析失败时这一栏也不是空的，改完还能写进去
       form: {
         slug: '',
         title: file.name.replace(/\.(md|markdown)$/i, ''),
         desc: '',
-        date: '',
+        date: todayStr(),
         cats: [],
         tags: [],
         draft: false,
@@ -1322,7 +1331,7 @@ async function handleFiles(fileList) {
         slug: plan.slug || (plan.slugCandidates || [])[0] || '',
         title: plan.meta ? plan.meta.title || '' : item.form.title,
         desc: plan.meta ? plan.meta.description || '' : '',
-        date: plan.meta ? plan.meta.pubDate || '' : '',
+        date: plan.meta ? plan.meta.pubDate || todayStr() : todayStr(),
         cats: plan.meta ? plan.meta.categories || [] : [],
         tags: plan.meta ? plan.meta.tags || [] : [],
         draft: plan.meta ? plan.meta.draft === true : false,

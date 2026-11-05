@@ -173,9 +173,13 @@ export async function analyze(raw, ctx = {}) {
   else if (description) add('info', `没有摘要，自动截取正文第一段：「${clip(description, 30)}」`);
   else add('warn', '没有摘要，正文首段也取不到 —— 需要手填');
 
-  // ---- 日期：没有就用今天 ----
+  // ---- 日期：一律用今天（2026-11-05 用户要求）----
+  //   原文件里的 date / pubDate 是「写笔记那天」，不是「发到站点那天」。
+  //   Obsidian 导出的笔记几乎都带 date，沿用的话每篇都得手改一遍，
+  //   所以这里默认按今天走；要发成别的日子，在弹窗的发布日期那一栏改。
   const dateRaw = pick(data, 'pubDate');
-  if (dateRaw) add('info', `发布日期来自 frontmatter：${String(dateRaw).slice(0, 10)}`);
+  const originalDate = dateRaw ? String(dateRaw).slice(0, 10) : '';
+  if (dateRaw) add('info', `发布日期用今天（原文件写的 ${originalDate} 没沿用）`);
   else add('info', `没有发布日期，用今天：${today()}`);
 
   // ---- h1 与标题层级 ----
@@ -266,7 +270,7 @@ export async function analyze(raw, ctx = {}) {
     meta: {
       title,
       description,
-      pubDate: String(dateRaw || today()).slice(0, 10),
+      pubDate: today(),
       categories: cats,
       tags: (Array.isArray(data.tags) ? data.tags : data.tags ? [data.tags] : []).map(String),
       draft: data.draft === true,
