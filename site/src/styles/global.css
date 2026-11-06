@@ -1555,8 +1555,11 @@ article img {
 }
 
 /* 每个月节点：跳过来时留出上端那道渐隐的高度（见 .film-fade），
-   否则月份标题正好落进渐隐区里，点完药丸像是没跳准 */
+   否则月份标题正好落进渐隐区里，点完药丸像是没跳准。
+   position: relative 不能少 —— 圆点是绝对定位的，没有它就会以 .timeline
+   为参照，所有月份的圆点全叠在时间轴顶上（2026-11-05 修） */
 .timeline-month {
+  position: relative;
   scroll-margin-top: 2rem;
 }
 
@@ -2024,6 +2027,8 @@ article img {
   .archive-item {
     column-gap: 0.6rem;
   }
+
+  /* 月份轨的窄屏规则写在轨道那一节后面（顺序在后才压得住） */
 }
 
 /* ============================================================
@@ -2084,60 +2089,106 @@ article img {
   background: var(--accent-soft);
 }
 
-/* ---------- 归档页的月份导航（2026-11-04，2026-11-05 起不再吸顶） ----------
- * 文章按年份铺开后，「翻到两年前那个月」不该靠滚轮。
- * 每条是一个真锚点，关掉 JS 也点得动；JS 只负责平滑滚动和当前月份高亮。
- * 现在它是胶片窗口（.film）的标题栏 —— 窗口自己就是滚动容器，
- * 导航不用再 sticky，跟着窗口顶部一起待着就行。 */
+/* ---------- 归档页的月份轨（2026-11-05 从顶部挪到最左边） ----------
+ * 顶上那排月份药丸撤了：时间轴本来在左边，月份挂在那儿更顺，
+ * 窗口也省下一条标题栏。
+ * 这一列同时承担**滚动条**的职责 —— 短竖条（.rail-knob）按 scrollTop
+ * 比例上下走，月份按它在内容里的位置钉在同一列上（top 由页面脚本算）。
+ * 每条仍是真锚点，关掉 JS 也点得动。
+ *
+ * 几何用两个变量收口：--rail-x 是滚动条基准线（不再画轨道线，
+ * 竖线交给时间轴），--rail-gap 是月份文字离左边的距离，窄屏只改这两个数。 */
 
-.tl-jump {
-  margin: 0 0 0.5rem;
-  padding: 0 0 0.5rem;
-  border-bottom: 1px solid var(--line);
-}
-
-.tl-jump-list {
+.film-rail {
+  --rail-x: 0.42rem;
+  --rail-gap: 1.3rem;
   position: relative;
-  display: flex;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  /* 月份多到装不下时横向滚。滚动条藏掉：
-     它高十来像素，会把这条本就该轻薄的东西撑得很笨重 */
-  overflow-x: auto;
-  scrollbar-width: none;
+  /* 宽度是量出来的：文字左起 1.3rem + 「2026/11」约 3rem + 6px 余量，
+     右边这 6px 是留给正文的呼吸，不能省 —— 少了月份数字会贴到时间轴上 */
+  width: 4.7rem;
+  /* 高度由 grid 拉伸到和滚动区一样高，滚动条才有整条行程可走 */
 }
 
-.tl-jump-list::-webkit-scrollbar {
+/* 这里原本还有一条 2px 的竖线，2026-11-06 删掉了：
+   时间轴自己在 .timeline::before 画的那条线才是版面的骨架，
+   左边再竖一条平行的灰线，两条之间只隔一个月份文字，
+   读起来像重复画了两次边框。月份和小绿点直接挂在时间轴旁边就行。 */
+
+/* 月份：绝对定位，top 由脚本按它在内容里的位置写。
+   没 JS 时全挤在最上面 —— 仍然点得动，只是没有比例感 */
+.rail-month {
+  position: absolute;
+  left: var(--rail-gap);
+  transform: translateY(-50%);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.rail-month:hover {
+  color: var(--ink);
+}
+
+/* 窄屏换成「11 月」，默认只显示宽屏那种写法 */
+.rail-num {
   display: none;
 }
 
-.tl-jump-chip {
-  display: inline-block;
-  padding: 0.22rem 0.62rem;
-  font-size: 0.78rem;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-  white-space: nowrap;
-  text-decoration: none;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  transition:
-    color 0.15s,
-    border-color 0.15s,
-    background 0.15s;
-}
-
-.tl-jump-chip:hover {
-  color: var(--ink);
-  border-color: var(--line-strong);
-}
-
-.tl-jump-chip.is-current {
+.rail-month.is-current {
   color: var(--accent);
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+/* 滚动指示：一根短竖条，不是圆点。
+   时间轴的月份节点本身是绿圆点（.timeline-dot），左边再来一个绿圆点、
+   又没有竖线托着，滚到两处 y 相近时就成了「两个一样的点」——
+   读者会以为月份节点跑到窗口外面去了。短竖条谁都不会认错：它是滑块。
+   top 由脚本按 scrollTop 比例写，代表这条的中心。 */
+.rail-knob {
+  position: absolute;
+  /* --rail-x 是这条轨道的基准线 */
+  left: calc(var(--rail-x) + 1px);
+  width: 2px;
+  height: 1.1rem;
+  margin-top: -0.55rem;
+  transform: translateX(-50%);
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+  transition: opacity 0.18s;
+}
+
+/* 内容没超出一屏时没有「滚动」可言，点就不用出现 */
+.film-rail.is-flat .rail-knob {
+  opacity: 0;
+}
+
+/* 窄屏：轨道贴边、月份只写「11 月」—— 这条轨占的是正文字宽，
+   390 宽下 75px 的轨等于把文章标题砍掉两成。
+   ⚠️ 必须写在 .film-rail 基础规则**之后**，否则被后者压回去 */
+@media (max-width: 520px) {
+  .film-rail {
+    /* 短条尽量贴窗口边：这一列只有 47px，再按 0.3rem 放就会贴着「11 月」 */
+    --rail-x: 0.1rem;
+    --rail-gap: 1rem;
+    width: 2.95rem;
+  }
+
+  .rail-month {
+    font-size: 0.66rem;
+  }
+
+  .rail-full {
+    display: none;
+  }
+
+  .rail-num {
+    display: inline;
+  }
 }
 
 /* ---------- 归档页的胶片窗口（2026-11-05） ----------
@@ -2160,17 +2211,25 @@ article img {
   box-shadow: var(--shadow-card);
 }
 
-/* 渐隐盖在它上面，所以它自己是定位参照 */
+/* 左边月份轨 + 右边滚动区。渐隐只盖右边，所以滚动区还要单独包一层 */
 .film-body {
   position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+/* 滚动区 + 两道渐隐。渐隐贴着它的边，不会盖住左边的月份轨 */
+.film-view {
+  position: relative;
+  min-width: 0;
 }
 
 /* 真正的滚动容器 */
 .film-scroll {
   /* 内容短的时候窗口自动收成内容高度，超过才滚。
-     28rem ≈ 画面里能同时读到 6 行：再高就不像「窗口」，
-     再矮一屏两屏就得翻，找东西反而累 */
-  max-height: min(62vh, 28rem);
+     42rem / 78vh ≈ 一屏能读到 10 行左右：前一版 28rem 只装 6 行，
+     翻得太勤；再高就不像「窗口」了，整页铺开也就失去胶片的意义 */
+  max-height: min(78vh, 42rem);
   overflow-y: auto;
   /* 留一点边：卡片阴影和过片时的位移不会被裁掉 */
   padding: 0.2rem 0.4rem;

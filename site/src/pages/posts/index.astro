@@ -29,6 +29,14 @@
 //   固定视野里对位比较（同名同类的文章往往隔着几个月）。
 //   为什么渐隐而不是留滚动条：窗口本身已经说明了「这是可以翻的东西」，
 //   道边渐隐比一条灰滑块更接近「胶片在片门里走」的观感。
+//
+// 2026-11-05 晚 第二版（用户两条反馈）：
+//   1. 顶部那排月份药丸撤掉，月份挪到窗口**最左边**的一条竖轨上 ——
+//      时间轴本来就在左边，月份挂在那儿比挂在顶上顺；窗口也少一行标题栏。
+//   2. 轨上那顆小绿点就是滚动条：按 scrollTop 的比例在轨上走，
+//      始终留在窗口里（原来的月份圆点会跟着内容滚出去）。
+//      窗口原先藏起来的滚动条，现在由这颗点代替。
+//   3. 窗口放大到 min(78vh, 42rem)：28rem 一屏只装得下 6 行，翻得勤。
 
 import { getCollection } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
@@ -48,8 +56,10 @@ type MonthGroup = {
   key: string;
   /** 节点标签：2026 年 11 月 */
   label: string;
-  /** 导航药丸上的短写法：2026/11 */
+  /** 轨上的短写法（宽屏）：2026/11 */
   short: string;
+  /** 轨上的极短写法（窄屏）：11 月 */
+  num: string;
   days: DayGroup[];
 };
 
@@ -66,6 +76,7 @@ for (const post of posts) {
       key: monthKey,
       label: `${date.getFullYear()} 年 ${date.getMonth() + 1} 月`,
       short: `${date.getFullYear()}/${pad(date.getMonth() + 1)}`,
+      num: `${date.getMonth() + 1} 月`,
       days: [],
     };
     months.push(month);
@@ -99,29 +110,30 @@ for (const post of posts) {
     </div>
   ) : (
     <div class="film" data-film>
-      {/* 月份导航：只有一个月时没得跳，整条不渲染。
-          每条都是普通锚点链接 —— 关掉 JS 也点得动，只是没有平滑滚动和高亮 */}
-      {months.length > 1 && (
-        <nav class="tl-jump" aria-label="按月份跳转">
-          <ul class="tl-jump-list" data-jump-list>
-            {months.map((month) => (
-              <li>
-                <a
-                  class="tl-jump-chip"
-                  href={`#m-${month.key}`}
-                  data-jump-to={`m-${month.key}`}
-                >
-                  {month.short}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      )}
-
       <div class="film-body">
-        <div class="film-scroll" data-film-scroll>
-          <ol class="timeline">
+        {/* 月份轨：窗口最左边一列，月份按各自在内容里的位置钉上去，
+            短竖条（.rail-knob）按滚动比例上下走 —— 它就是滚动条。
+            这一列自己不再画竖线，骨架交给时间轴那一条。
+            每条仍是普通锚点，关掉 JS 也点得动 */}
+        <div class="film-rail" data-film-rail aria-label="按月份跳转">
+          {months.map((month) => (
+            <a
+              class="rail-month"
+              href={`#m-${month.key}`}
+              data-jump-to={`m-${month.key}`}
+            >
+              {/* 宽屏写全 2026/11，窄屏只留 11 月：轨占的是正文字宽 */}
+              <span class="rail-full">{month.short}</span>
+              <span class="rail-num">{month.num}</span>
+            </a>
+          ))}
+          <span class="rail-knob" data-rail-knob aria-hidden="true" />
+        </div>
+
+        {/* 滚动区单独包一层：上下渐隐只盖内容，不盖左边的月份轨 */}
+        <div class="film-view">
+          <div class="film-scroll" data-film-scroll>
+            <ol class="timeline">
             {months.map((month) => (
               <li class="timeline-month" id={`m-${month.key}`}>
                 {/* 圆点是纯装饰，读屏软件跳过；月份标签才是这一节点的名字 */}
@@ -155,12 +167,13 @@ for (const post of posts) {
                 </ol>
               </li>
             ))}
-          </ol>
-        </div>
+            </ol>
+          </div>
 
-        {/* 两道渐隐叠在滚动区上面，显隐由脚本按滚动位置切 */}
-        <span class="film-fade film-fade-top" aria-hidden="true" />
-        <span class="film-fade film-fade-bottom" aria-hidden="true" />
+          {/* 两道渐隐叠在滚动区上面，显隐由脚本按滚动位置切 */}
+          <span class="film-fade film-fade-top" aria-hidden="true" />
+          <span class="film-fade film-fade-bottom" aria-hidden="true" />
+        </div>
       </div>
     </div>
   )}
@@ -169,19 +182,22 @@ for (const post of posts) {
 <script>
   // 胶片窗口（2026-11-05）
   //
-  // 三件事：
+  // 四件事：
   //   1. 上下渐隐只在那一侧还有内容时出现（滚到顶没有上沿、滚到底没有下沿）；
   //   2. 每篇按它离窗口上下沿的距离算一个 --film-k（1 = 在两门之间、完全清楚；
   //      0 = 正贴着窗口边），CSS 拿它控制透明度和缩放 —— 就是过片时
   //      「中间清楚、进片门就淡出」的观感；
-  //   3. 月份药丸的高亮改成相对窗口算 —— 现在滚动的是窗口，不是页面。
+  //   3. 左边那条月份轨：月份按各自在内容里的位置钉上去，小绿点按滚动比例走，
+  //      它就是这根滚动条（窗口自己的滚动条是藏起来的）；
+  //   4. 当前月份高亮按窗口算 —— 滚动的是窗口，不是页面。
   //
   // 为什么不用 IntersectionObserver：需要的是「离中心多远」这个连续值，
   // 观察器只能给「进没进视口」的离散结果。条目只有几十条，每帧批量读
   // rect 再批量写自定义属性，代价可以忽略（超过 200 条就不算了，见 depth）。
   const film = document.querySelector('[data-film]');
   const scroller = document.querySelector('[data-film-scroll]');
-  const strip = document.querySelector('[data-jump-list]');
+  const rail = document.querySelector('[data-film-rail]');
+  const knob = document.querySelector('[data-rail-knob]');
 
   if (film && scroller) {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -190,8 +206,8 @@ for (const post of posts) {
     // 那时卡片和渐隐已经足够表达「胶片」，不需要每个元素跟着调。
     const depth = items.length <= 200 && !reduced.matches;
 
-    const chips = strip
-      ? [...strip.querySelectorAll('[data-jump-to]')]
+    const chips = rail
+      ? [...rail.querySelectorAll('[data-jump-to]')]
           .map((node) => {
             const target = document.getElementById(node.dataset.jumpTo || '');
             return target ? { chip: node, target } : null;
@@ -201,20 +217,6 @@ for (const post of posts) {
 
     let current = null;
 
-    // 药丸多到装不下时横向滚动，把当前这个挪进视野（居中）。
-    // 不直接用 chip.scrollIntoView：那会连整个窗口一起滚。
-    const reveal = (chip) => {
-      const left = chip.offsetLeft;
-      const visible =
-        left >= strip.scrollLeft &&
-        left + chip.offsetWidth <= strip.scrollLeft + strip.clientWidth;
-      if (visible) return;
-      strip.scrollTo({
-        left: Math.max(0, left - strip.clientWidth / 2 + chip.offsetWidth / 2),
-        behavior: reduced.matches ? 'auto' : 'smooth',
-      });
-    };
-
     const mark = (chip) => {
       if (chip === current) return;
       current = chip;
@@ -223,8 +225,14 @@ for (const post of posts) {
         item.chip.classList.toggle('is-current', on);
         item.chip.setAttribute('aria-current', on ? 'true' : 'false');
       }
-      reveal(chip);
     };
+
+    const maxScroll = () =>
+      Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+
+    // 月份文字的落点范围：上下各留 12px，标签不会半个探出窗口
+    const RAIL_PAD = 12;
+    const trackSpan = () => Math.max(0, (rail ? rail.clientHeight : 0) - RAIL_PAD * 2);
 
     // 哪一侧还有内容 —— 4px 的容差，免得像素级误差让渐隐一直闪
     const syncEdges = () => {
@@ -242,7 +250,7 @@ for (const post of posts) {
       if (!depth) return;
       // 内容根本没超出窗口时不做淡出：最后一张卡正好贴着下沿，
       // 按「片门」算法会被判成「滚出去的边缘」，可下面其实什么都没有
-      if (scroller.scrollHeight - scroller.clientHeight <= 4) {
+      if (maxScroll() <= 4) {
         for (const item of items) item.style.setProperty('--film-k', '1');
         return;
       }
@@ -262,16 +270,76 @@ for (const post of posts) {
       const top = scroller.getBoundingClientRect().top;
       let active = chips[0];
       for (const item of chips) {
-        // 月份节点顶部越过窗口顶 1.5rem 才算「到了」：
+        // 月份节点顶部越过窗口顶 24px 才算「到了」：
         // 阈值太小的话，标签还压在渐隐里就会被判成当前月，看着像提前跳了
         if (item.target.getBoundingClientRect().top - top <= 24) active = item;
         else break;
       }
       // 滚到底时最后一个月一定是「当前」—— 列表短的时候窗口只能滚几十像素，
-      // 最后那个月份标签永远走不到顶部，光靠上面的规则会让药丸一整段停在旧月份
-      const rest = scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop;
-      if (rest <= 4) active = chips[chips.length - 1];
+      // 最后那个月份标签永远走不到顶部，光靠上面的规则会让高亮一整段停在旧月份。
+      // 前提是真的能滚：内容没超出一屏时 maxScroll 是 0，不拦的话一进页面
+      // 就会把最后一个月判成当前（2026-11-05 踩过）
+      const max = maxScroll();
+      if (max > 4 && max - scroller.scrollTop <= 4) active = chips[chips.length - 1];
       mark(active.chip);
+    };
+
+    // 滚动滑块。位置按 scrollTop 的比例算，不按「当前是哪个月」算：
+    // 一个月二十篇、另一个月一篇，按月跳变的话滑块会瞬移，看不出滚了多少。
+    // 上下各留 KNOB_PAD（比月份端点再让 8px ≈ 滑块半高 + 余量），
+    // 这样滚到两头时滑块整体还在窗口里
+    const KNOB_PAD = RAIL_PAD + 8;
+    const syncKnob = () => {
+      if (!knob || !rail) return;
+      const max = maxScroll();
+      const span = Math.max(0, rail.clientHeight - KNOB_PAD * 2);
+      const ratio = max <= 4 ? 0 : Math.max(0, Math.min(1, scroller.scrollTop / max));
+      knob.style.top = `${(KNOB_PAD + ratio * span).toFixed(1)}px`;
+    };
+
+    // 月份在轨上的落点：按它在内容里离顶端的距离换算成比例。
+    // 不能用「第 i 个月 / 共 n 个月」均分 —— 内容长短差得远时点和滚动对不上。
+    const LABEL_GAP = 22;
+    const layoutRail = () => {
+      if (!rail) return;
+      const max = maxScroll();
+      const span = trackSpan();
+      // 内容没超出一屏就没有「滚到哪儿」可言，点也就不用出现
+      rail.classList.toggle('is-flat', max <= 4);
+      if (chips.length === 0) return;
+
+      const points = chips.map((item, i) => {
+        let at;
+        if (max <= 4) {
+          // 均分排开，至少别叠在一起
+          at = RAIL_PAD + (span * i) / Math.max(1, chips.length - 1);
+        } else {
+          // 32 = 内容顶部到月份节点的留白，和点击跳转用的是同一个数
+          const offset =
+            item.target.getBoundingClientRect().top -
+            scroller.getBoundingClientRect().top +
+            scroller.scrollTop -
+            32;
+          at = RAIL_PAD + Math.max(0, Math.min(1, offset / max)) * span;
+        }
+        return { item, at };
+      });
+
+      // 防重叠：从上往下推，相邻至少隔 LABEL_GAP；推过头了再整体往上压
+      for (let i = 1; i < points.length; i++) {
+        if (points[i].at < points[i - 1].at + LABEL_GAP) {
+          points[i].at = points[i - 1].at + LABEL_GAP;
+        }
+      }
+      const last = points[points.length - 1].at;
+      if (last > RAIL_PAD + span) {
+        const over = last - (RAIL_PAD + span);
+        for (const point of points) point.at -= over;
+      }
+
+      for (const point of points) {
+        point.item.chip.style.top = `${Math.max(0, point.at).toFixed(1)}px`;
+      }
     };
 
     let queued = false;
@@ -280,23 +348,28 @@ for (const post of posts) {
       syncEdges();
       syncDepth();
       syncActive();
+      syncKnob();
     };
     const schedule = () => {
       if (queued) return;
       queued = true;
       requestAnimationFrame(sync);
     };
+    const relayout = () => {
+      layoutRail();
+      schedule();
+    };
 
-    if (strip) {
-      strip.addEventListener('click', (event) => {
+    if (rail) {
+      rail.addEventListener('click', (event) => {
         const chip = event.target.closest('[data-jump-to]');
         if (!chip) return;
         const target = document.getElementById(chip.dataset.jumpTo || '');
         if (!target) return;
         event.preventDefault();
         // 只滚窗口，不用 scrollIntoView：那个会连着页面一起滚，
-        // 结果药丸自己跟着往上跑，点完就找不着了（页面比窗口高时会这样）。
-        // 32 对应 CSS 里 .timeline-month 的 scroll-margin-top
+        // 结果月份轨跟着往上跑，点完就找不着了（页面比窗口高时会这样）。
+        // 32 对应 .timeline-month 的 scroll-margin-top
         const offset =
           target.getBoundingClientRect().top -
           scroller.getBoundingClientRect().top +
@@ -312,10 +385,11 @@ for (const post of posts) {
     }
 
     scroller.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
-    // 带 #m-xxxx 直接进来的，浏览器要等布局稳定才把窗口滚到位，
-    // 所以 load 之后再同步一次，药丸高亮和渐隐才是对的
-    window.addEventListener('load', schedule);
-    sync();
+    window.addEventListener('resize', relayout);
+    // 带 #m-xxxx 直接进来的，浏览器要等布局稳定才把窗口滚到位；
+    // 字体加载完高度也会变，轨上的点得重算一次
+    window.addEventListener('load', relayout);
+    if (document.fonts) document.fonts.addEventListener('loadingdone', relayout);
+    relayout();
   }
 </script>
