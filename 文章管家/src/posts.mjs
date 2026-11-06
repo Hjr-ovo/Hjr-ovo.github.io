@@ -587,13 +587,20 @@ export async function slugExists(slug) {
  * 用户要求：文件名自动从文章名来，出现两篇一样的要「自动处理」——
  * 所以这里不报错，直接加序号：`two-sum` → `two-sum-2` → `two-sum-3`。
  * 回收箱里的名字也算占用，否则恢复时会撞车。
+ *
+ * `reserved` 是**还没落盘**的名字（同一批入库里前面几篇刚分到的）。
+ * 批量入库时六篇在磁盘上都还不存在，只查磁盘会让它们全拿到同一个名字，
+ * 弹窗里六行长得一模一样 —— 所以由调用方把这一批已经用掉的名单递进来。
  */
-export async function uniqueSlug(base) {
+export async function uniqueSlug(base, reserved = []) {
   const clean = String(base || '').trim() || 'post';
-  if (!(await slugExists(clean))) return clean;
+  const taken = new Set(Array.isArray(reserved) ? reserved : []);
+  const free = async (name) => !taken.has(name) && !(await slugExists(name));
+
+  if (await free(clean)) return clean;
   for (let n = 2; n < 1000; n++) {
     const cand = `${clean}-${n}`;
-    if (!(await slugExists(cand))) return cand;
+    if (await free(cand)) return cand;
   }
   throw Object.assign(new Error(`「${clean}」这个名字的变体用完了，换个名字`), { code: 'EXISTS' });
 }

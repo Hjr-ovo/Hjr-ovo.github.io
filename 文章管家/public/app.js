@@ -1276,6 +1276,18 @@ function removeBatchItem(id) {
   }
 }
 
+/**
+ * 队列里**已经分到名字**的篇目（不含自己）。
+ *
+ * 分析是一篇一篇来的，前一篇分到名字时它还没落盘，服务端只查磁盘看不到。
+ * 把这份名单递过去，同一批里就不会出现六篇都叫 post-2026-11-06。
+ */
+function reservedSlugs(exceptId) {
+  return state.batch
+    .filter((it) => it.id !== exceptId && it.form && it.form.slug)
+    .map((it) => it.form.slug);
+}
+
 /** 拖进来 / 选中一批文件：先全部入队，再一篇一篇分析 */
 async function handleFiles(fileList) {
   const all = [...fileList];
@@ -1324,7 +1336,11 @@ async function handleFiles(fileList) {
     try {
       const plan = await api('/api/analyze', {
         method: 'POST',
-        body: JSON.stringify({ raw: item.raw, filename: item.filename }),
+        body: JSON.stringify({
+          raw: item.raw,
+          filename: item.filename,
+          reserved: reservedSlugs(item.id),
+        }),
       });
       item.plan = plan;
       item.form = {

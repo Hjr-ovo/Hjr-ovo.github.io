@@ -204,6 +204,11 @@ async function handleApi(req, res, url) {
     const result = await analyze(body.raw, {
       filename: body.filename,
       existingCategories: await existingCategories(),
+      // 同一批入库还没落盘的名字：批量拖进来时，磁盘上查不到重名，
+      // 不带上这份名单六篇会拿到同一个文件名
+      reserved: Array.isArray(body.reserved)
+        ? body.reserved.filter((s) => typeof s === 'string' && s !== '')
+        : [],
     });
     return json(res, 200, result);
   }
