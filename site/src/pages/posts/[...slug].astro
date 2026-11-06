@@ -72,7 +72,42 @@ const moreTitle = related.length > 0 ? '相关文章' : '继续阅读';
         是为了让窄屏能把目录塞到页头和正文之间 —— 见 global.css 的 grid-template-areas */}
     <div class="post-layout">
       <header>
-        <a class="back-link" data-pagefind-ignore href="/posts/">← 归档</a>
+        {/* 返回入口跟着来源走（2026-11-06）：从首页点进来的回首页，
+            从归档/分类/标签/搜索点进来的回对应的那一页。
+            默认写「归档」，是因为直接打开链接（分享、搜索、收藏）时
+            referrer 为空，这时候「回全部文章」是最说得通的落点。
+            下面那段脚本必须 is:inline —— 普通 <script> 会被打包成模块延后执行，
+            那就得先看见「归档」再跳成「首页」，闪一下 */}
+        <a class="back-link" data-pagefind-ignore data-back href="/posts/">← 归档</a>
+        <script is:inline>
+          (() => {
+            const link = document.querySelector('[data-back]');
+            if (!link || !document.referrer) return;
+
+            let from;
+            try {
+              from = new URL(document.referrer);
+            } catch {
+              return;
+            }
+            // 站外来的（搜索引擎、别人的博客、聊天软件）不认，回归档
+            if (from.origin !== location.origin) return;
+
+            const path = from.pathname;
+            let label = '';
+            if (path === '/' || path === '') label = '首页';
+            else if (/^\/posts\/?$/.test(path)) label = '归档';
+            else if (/^\/categories(\/|$)/.test(path)) label = '分类';
+            else if (/^\/tags(\/|$)/.test(path)) label = '标签';
+            else if (/^\/search\/?$/.test(path)) label = '搜索';
+            // 文章之间互点（相关文章、系列上下篇）时不改：
+            // 「← 上一篇」这种入口只会让人不知道自己在列表的哪一格
+            else return;
+
+            link.setAttribute('href', path);
+            link.textContent = '← ' + label;
+          })();
+        </script>
 
         <h1 data-pagefind-meta="title">{post.data.title}</h1>
 
