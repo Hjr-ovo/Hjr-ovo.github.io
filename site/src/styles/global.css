@@ -1497,6 +1497,22 @@ article img {
   color: var(--accent);
 }
 
+/* 底部两个按钮并排：去归档 + 随机看一篇（2026-11-06 起常驻） */
+.more-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+/* 「随机看一篇」是 <button>，不是 <a>：button 既不继承字体，行高也是 normal，
+   不补这两行它会比旁边那个链接矮一截、字也变成浏览器默认的宋体按钮字 */
+button.more-link {
+  font-family: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
 .more-hint {
   margin: 0.65rem 0 0;
   font-size: 0.82rem;
@@ -1507,6 +1523,23 @@ article img {
  * 形态是一根竖线贯穿的时间轴：每个有文章的月份一个节点（圆点 + 月份标签），
  * 当月文章列在节点下面。线用 ::before 绝对定位画，圆点不透明，
  * 线在圆点处自然被盖住断开，不用给线算「跳过圆点」的分段。 */
+
+/* 抬头：左边标题 + 篇数，右边视图切换（2026-11-06）。
+   用 flex 两端对齐，窄屏放不下时按钮整组折到下一行，不会去挤标题 */
+.archive-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+}
+
+/* 排序栏那套上下 margin 是给它独占一行用的，挂进抬头里要交回去。
+   .4rem 是把按钮拉到跟 h1 同一条中线：标题 1.85rem/1.35 约 40px 高，
+   按钮约 26px，差的一半就是这 7px —— 顶对齐时按钮看着比标题高一截 */
+.archive-head .sort-bar {
+  margin: 0.4rem 0 0;
+}
 
 .timeline {
   list-style: none;
@@ -2242,6 +2275,40 @@ article img {
 
 .film-scroll::-webkit-scrollbar {
   display: none;
+}
+
+/* ---------- 归档页的「整页」视图（2026-11-06） ----------
+ * 把窗口那层壳整个撤掉：留白 / 边框 / 圆角 / 阴影归零，滚动区取消限高，
+ * 上下渐隐和左侧月份列一并隐藏 —— 回到 11-05 之前那版传统归档页。
+ * 卡片本身留着（两种形态之间切换时行不会突然变样，眼睛不用重新适应），
+ * 只是不再有过片效果：--film-k 由脚本清掉，CSS 回落到 1，全部清楚。
+ *
+ * 选择器挂在 <html> 上而不是 .film：首帧由页面顶部那段内联脚本按
+ * localStorage 设好，等打包脚本跑起来时窗口还没画出来，不会闪。
+ */
+html[data-archive-view='plain'] .film {
+  margin: 1.6rem 0 2.5rem;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* 两列栅格退回单列：月份列已经藏了，不还原的话右边那一列会缩 */
+html[data-archive-view='plain'] .film-body,
+html[data-archive-view='plain'] .film-view {
+  display: block;
+}
+
+html[data-archive-view='plain'] .film-rail,
+html[data-archive-view='plain'] .film-fade {
+  display: none;
+}
+
+html[data-archive-view='plain'] .film-scroll {
+  max-height: none;
+  overflow: visible;
 }
 
 /* 上下渐隐：盖在内容上，但不吃点击 */

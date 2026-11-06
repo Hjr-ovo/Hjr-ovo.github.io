@@ -95,12 +95,62 @@ const restCount = posts.length - recentPosts.length;
     </ul>
   )}
 
-  {/* 还有更早的文章时，底部给一条去归档页的路。
-      restCount 为 0 就整块不渲染 —— 文章不够 10 篇时不该出现一个点了也没用的按钮 */}
-  {restCount > 0 && (
+  {/* 底部两条出路（2026-11-06 起常驻）：
+      「更多」去归档页；「随机」在全部文章里挑一篇，读者挑不出来时不用自己翻。
+      以前这里 restCount === 0 就整块不渲染，结果文章不到 10 篇时首页连个
+      去归档的入口都没有 —— 现在只要站上有文章就给。 */}
+  {posts.length > 0 && (
     <div class="more-posts">
-      <a class="more-link" href="/posts/">查看更多历史文章</a>
-      <p class="more-hint">还有 {restCount} 篇更早的文章</p>
+      <div class="more-actions">
+        <a class="more-link" href="/posts/">查看更多文章</a>
+        <button class="more-link" type="button" data-random-post>
+          随机看一篇
+        </button>
+      </div>
+      {restCount > 0 && <p class="more-hint">还有 {restCount} 篇更早的文章</p>}
     </div>
   )}
+
+  {/* 全部文章的地址，给「随机看一篇」用。首页只渲染 10 篇，
+      随机池得是全量，所以服务端把整份列表写出来，脚本读它。
+      用 application/json 而不是 data-*：文章多了之后属性会拉得很长，
+      而且 JSON 里的引号不用转义，出错的余地小一点 */}
+  {posts.length > 0 && (
+    <script
+      type="application/json"
+      id="post-links"
+      set:html={JSON.stringify(posts.map((post) => `/posts/${post.id}/`))}
+    ></script>
+  )}
+
+  <script>
+    // 「随机看一篇」：从服务端写好的全量地址里抽一个。
+    // 不放后端：这是个纯跳转，没必要为它多造一个构建期随机（那样每次构建
+    // 生成的 HTML 都不一样，diff 里全是噪音）。
+    const randomButton = document.querySelector('[data-random-post]');
+    const linkData = document.getElementById('post-links');
+
+    if (randomButton && linkData) {
+      let links = [];
+      try {
+        links = JSON.parse(linkData.textContent || '[]');
+      } catch {
+        // JSON 被改坏时按钮干脆不出现，总比点了没反应好
+        links = [];
+      }
+
+      if (links.length > 0) {
+        randomButton.addEventListener('click', () => {
+          // 别抽到当前页：在首页时 pathname 是 /，本来就抽不中，
+          // 但这段以后要是被挪到别处，这条能兜住
+          const pool =
+            links.length > 1 ? links.filter((href) => href !== location.pathname) : links;
+          const pick = pool[Math.floor(Math.random() * pool.length)];
+          location.href = pick;
+        });
+      } else {
+        randomButton.remove();
+      }
+    }
+  </script>
 </BaseLayout>

@@ -99,8 +99,37 @@ for (const post of posts) {
 ---
 
 <BaseLayout title="归档" description="所有文章的归档，按月份排在时间轴上。">
-  <h1>归档</h1>
-  <p class="page-desc">共 {posts.length} 篇。</p>
+  {/* 视图偏好要在第一帧就定下来：等打包脚本跑到这里，窗口已经按默认形态
+      画出来了，再切成「整页」会明显闪一下。内联执行、只写一个属性，很便宜 */}
+  <script is:inline>
+    try {
+      const saved = localStorage.getItem('archive-view');
+      document.documentElement.dataset.archiveView = saved === 'plain' ? 'plain' : 'window';
+    } catch {
+      document.documentElement.dataset.archiveView = 'window';
+    }
+  </script>
+
+  <div class="archive-head">
+    <div>
+      <h1>归档</h1>
+      <p class="page-desc">共 {posts.length} 篇。</p>
+    </div>
+
+    {/* 两种形态：默认是定高的胶片窗口（翻着看），「整页」把窗口拆掉、
+        时间轴一次铺到底，就是 2026-11-05 之前那种传统归档页。
+        按钮复用排序栏的样式 —— 同一套「一排小胶囊里选一个」的语言 */}
+    {posts.length > 0 && (
+      <div class="sort-bar" data-view-bar role="group" aria-label="切换归档视图">
+        <button type="button" class="sort-btn" data-view="window" title="定高窗口，翻着看">
+          窗口
+        </button>
+        <button type="button" class="sort-btn" data-view="plain" title="一次展开到底">
+          整页
+        </button>
+      </div>
+    )}
+  </div>
 
   {posts.length === 0 ? (
     <div class="empty">
@@ -343,6 +372,9 @@ for (const post of posts) {
     let queued = false;
     const sync = () => {
       queued = false;
+      // 整页形态：窗口不再是滚动容器，这些量全都失去意义（算出来也是错的，
+      // 窗口高度等于内容高度，每张卡都会被判成「贴着片门」，整页半透明）
+      if (isPlain()) return;
       syncEdges();
       syncDepth();
       syncActive();
@@ -388,6 +420,52 @@ for (const post of posts) {
     // 字体加载完高度也会变，轨上的点得重算一次
     window.addEventListener('load', relayout);
     if (document.fonts) document.fonts.addEventListener('loadingdone', relayout);
+
+    // ---- 视图切换（2026-11-06）----
+    // 两种形态共用同一份 DOM，只是换一套 CSS：窗口形态限高 + 渐隐 + 月份列；
+    // 整页形态把外壳拆掉，时间轴一次铺到底（回到 11-05 之前的样子）。
+    // 偏好存 localStorage，和排序栏一样；首帧由页面顶部的内联脚本先定好。
+    const VIEW_KEY = 'archive-view';
+    const root = document.documentElement;
+    const isPlain = () => root.dataset.archiveView === 'plain';
+    const viewButtons = [...document.querySelectorAll('[data-view]')];
+
+    const paintView = (view) => {
+      for (const button of viewButtons) {
+        const on = button.dataset.view === view;
+        button.classList.toggle('is-active', on);
+        button.setAttribute('aria-pressed', String(on));
+      }
+    };
+
+    // 整页形态里 --film-k 没有意义（没有「片门」），必须清掉：
+    // 留着的话切回窗口时第一帧还是上一次算出来的透明度
+    const clearDepth = () => {
+      for (const item of items) item.style.removeProperty('--film-k');
+    };
+
+    const setView = (view) => {
+      root.dataset.archiveView = view;
+      paintView(view);
+      try {
+        localStorage.setItem(VIEW_KEY, view);
+      } catch {
+        // 隐私模式下 localStorage 会抛错，记不住偏好不影响切换
+      }
+      if (view === 'plain') {
+        clearDepth();
+        // 窗口不再滚动，旧 scrollTop 留着的话切回来位置会莫名其妙
+        scroller.scrollTop = 0;
+      } else {
+        relayout();
+      }
+    };
+
+    paintView(isPlain() ? 'plain' : 'window');
+    for (const button of viewButtons) {
+      button.addEventListener('click', () => setView(button.dataset.view));
+    }
+
     relayout();
   }
 </script>
