@@ -187,14 +187,14 @@ for (const post of posts) {
                             <a class="archive-link" href={`/posts/${post.id}/`}>
                               {post.data.title}
                             </a>
-                            {/* 分类：只在传统形态露出来（2026-11-06 用户要求）。
-                                窗口形态一行只留日期/字数/标题 —— 卡片窄、又要跟着
-                                筒弯，再挂一颗胶囊就挤了。
-                                外层永远渲染，靠 CSS 切显隐，两形态共用同一份 DOM */}
+                            {/* 分类：两种形态都显示（2026-11-06），颜色和首页卡片
+                                一致 —— 全站只有一种「分类」的绿，读者不用再学第二套。
+                                靠 margin-left: auto 推到行尾，标题长短不一时右侧
+                                那列自己对齐成一条竖线 */}
                             {post.data.categories.length > 0 && (
                               <span class="archive-cat">
                                 {post.data.categories.map((category) => (
-                                  <a class="tag muted" href={`/categories/${category}/`}>
+                                  <a class="tag" href={`/categories/${category}/`}>
                                     {category}
                                   </a>
                                 ))}
@@ -225,8 +225,10 @@ for (const post of posts) {
   //
   // 四件事：
   //   1. 上下渐隐只在那一侧还有内容时出现（滚到顶没有上沿、滚到底没有下沿）；
-  //   2. 每行（一天一组）按它离窗口中心的距离算三个 --cyl-*，把整条时间轴
-  //      当成横放的圆柱：中间那行正对读者、最宽最清楚，两端转过去、变窄变淡；
+  //   2. 每行按它离窗口中心的距离算四个 --cyl-*，把整条时间轴当成横放的圆柱：
+  //      中间那行正对读者、最宽最清楚，两端转过去、变窄变淡，整筒随滚动速度
+  //      往前倾一点 —— 但**只有滚的时候才成立**，停下会自己摊平成普通列表
+  //      （energy 系数，见 syncDepth 上面的注释）；
   //   3. 左边那条月份轨：月份按各自在内容里的位置钉上去，小绿点按滚动比例走，
   //      它就是这根滚动条（窗口自己的滚动条是藏起来的）；
   //   4. 当前月份高亮按窗口算 —— 滚动的是窗口，不是页面。
@@ -306,6 +308,33 @@ for (const post of posts) {
     const CYL_FLOOR = 0.35; // 最淡停在这儿，不再往下掉
     const CYL_MAX = 1.4; // θ 上限（约 80°），再大就在筒背面了
 
+    // ---- 惯性：筒只在滚起来时成立（2026-11-06）----
+    //
+    // energy 是「成筒程度」：滚一下爬到 1，停下后每帧乘 0.9，约 0.6 秒摊平。
+    // 三个形变量整体乘它，于是在「普通卡片列表」和「筒」之间连续过渡 ——
+    // 不是「啪」地切换，而是滚起来筒慢慢卷上、停下再慢慢摊开。
+    // 为什么不干脆常驻：静止时每行都按离中心的距离缩一遍，停在那儿看是一张
+    // 「近大远小」的图，读起来费劲。筒应该是滚动的产物，不是静止的样子。
+    //
+    // tilt 是「整筒再额外倾一点」的角度（度），跟着滚动速度走：往下滚，卡片
+    // 像被筒带着往前翻一点点；往上滚反过来。速度取指数平滑，滚轮一格 100px
+    // 的跳变不会让倾角一下打满。停下速度归零，倾角自己回正。
+    //
+    // 真正撑起「立体」观感的是**跟着 θ 转**那一份（见 syncDepth 里的 CYL_BEND）：
+    // 筒面上每一点的切面朝向本来就等于 θ，卡片按 θ 一起转，上端的卡顶边往
+    // 后倒、下端的下边往后倒 —— 于是每张卡都成了一个透视梯形，筒才看得出弧。
+    // 只做整体匀速倾斜（只按速度算）实测只有 0.9°，肉眼看不出任何东西。
+    const CYL_BEND = 0.5; // 每弧度 θ 让卡片绕 X 轴转多少弧度
+    const DEG = 180 / Math.PI;
+    const TILT_MAX = 4; // 速度带来的额外倾角上限，再大文字会糊
+    const TILT_K = 0.06; // 每帧滚动位移 1px 换算成多少度
+    const ENERGY_UP = 0.45; // 每帧爬升步长：两帧到满（约 33ms），一滚就成筒
+    const ENERGY_DOWN = 0.9; // 停下后每帧衰减
+
+    let energy = 0;
+    let vel = 0;
+    let tilt = 0;
+
     // 每行的**布局**位置。必须缓存：transform 会改变 getBoundingClientRect，
     // 逐帧拿变换后的位置去算下一帧，等于自己喂自己 —— 卡片会慢慢漂走或者抖。
     // 只有窗口尺寸 / 字体 / 视图切换时重新量（见 relayout）。
@@ -318,6 +347,7 @@ for (const post of posts) {
         item.style.removeProperty('--cyl-y');
         item.style.removeProperty('--cyl-s');
         item.style.removeProperty('--cyl-o');
+        item.style.removeProperty('--cyl-t');
       }
       const boxTop = scroller.getBoundingClientRect().top;
       const base = scroller.scrollTop;
@@ -327,18 +357,21 @@ for (const post of posts) {
       });
     };
 
-    const setCyl = (row, dy, s, o) => {
+    const setCyl = (row, dy, s, o, t) => {
       row.node.style.setProperty('--cyl-y', `${dy.toFixed(1)}px`);
       row.node.style.setProperty('--cyl-s', s.toFixed(3));
       row.node.style.setProperty('--cyl-o', o.toFixed(3));
+      row.node.style.setProperty('--cyl-t', `${t.toFixed(2)}deg`);
     };
 
     const syncDepth = () => {
       if (!depth || rows.length === 0) return;
-      // 内容根本没超出窗口时不做任何变形：这时窗口高度等于内容高度，
-      // 上下两端本来就没有「转过去」可言，硬算会让首尾两张半淡
-      if (maxScroll() <= 4) {
-        for (const row of rows) setCyl(row, 0, 1, 1);
+      // 内容没超出窗口（窗口高度等于内容高度，两端没有「转过去」可言）、
+      // 或者已经停下（energy 归零）→ 全部摊平。
+      // 摊平是「正常值」不是「没有样式」：脚本停了以后留下的就是这份值，
+      // 读者看到的是一份等宽、全不透明、不倾斜的普通卡片列表
+      if (maxScroll() <= 4 || energy <= 0) {
+        for (const row of rows) setCyl(row, 0, 1, 1, 0);
         return;
       }
       const H = scroller.clientHeight;
@@ -349,16 +382,21 @@ for (const post of posts) {
       // 窄屏打折。手机上的卡片本来就只剩一百多像素，再压到六成，
       // 标题就得折成三行 —— 筒感不该拿可读性换
       const shrink = Math.min(1, Math.max(0.45, (scroller.clientWidth - 300) / 400));
+      const e = energy;
       const top = scroller.scrollTop;
       for (const row of rows) {
         const y = row.center - top - axis; // 离窗口中心多远（px，向下为正）
         const theta = Math.max(-CYL_MAX, Math.min(CYL_MAX, y / R));
-        const s = 1 - (1 - Math.cos(theta)) * shrink;
+        const s = 1 - (1 - Math.cos(theta)) * shrink * e;
         // R·sinθ 是这一行在筒面上的投影位置，减 y 就是它要挪多少
-        const dy = (R * Math.sin(theta) - y) * CYL_SHIFT;
+        const dy = (R * Math.sin(theta) - y) * CYL_SHIFT * e;
         // 按 |θ| 占 θ 上限的比例线性淡下去，两端正好到 0.35
-        const o = 1 - (1 - CYL_FLOOR) * Math.min(1, Math.abs(theta) / thetaMax);
-        setCyl(row, dy, s, o);
+        const o = 1 - (1 - CYL_FLOOR) * Math.min(1, Math.abs(theta) / thetaMax) * e;
+        // 倾角 = 筒面切向（θ 换算成角度）× CYL_BEND + 速度带来的那一份。
+        // 符号靠 θ 自己带：上端的卡 θ>0 顶边往后倒，下端的反过来 —— 一圈看下来
+        // 就是筒面在转。整体再乘 energy，摊平的时候角度一起归零
+        const t = (theta * CYL_BEND * DEG + tilt) * e;
+        setCyl(row, dy, s, o, t);
       }
     };
 
@@ -439,26 +477,58 @@ for (const post of posts) {
       }
     };
 
-    let queued = false;
-    const sync = () => {
-      queued = false;
+    // 每帧：先按「这一帧滚了多少」推进 energy / vel / tilt，再统一写样式。
+    // 为什么是自己跑 rAF 而不是把结果交给 CSS 过渡：摊平需要「停下之后继续
+    // 演一段」，而 CSS 过渡只认最终值，中途改值就重新计时，反而追不上滚动。
+    let frame = 0;
+    let lastTop = scroller.scrollTop;
+
+    const tick = () => {
+      frame = 0;
       // 传统形态：窗口不再是滚动容器，这些量全都失去意义（算出来也是错的，
       // 窗口高度等于内容高度，每行都会被算出很大的 θ，整页歪着而且半透明）
-      if (isPlain()) return;
+      if (isPlain()) {
+        energy = 0;
+        vel = 0;
+        tilt = 0;
+        return;
+      }
+
+      const top = scroller.scrollTop;
+      const delta = top - lastTop;
+      lastTop = top;
+
+      if (Math.abs(delta) > 0.4) {
+        energy = Math.min(1, energy + ENERGY_UP);
+        // 0.6 / 0.4 的指数平滑：单帧的滚轮跳变会被摊到后面几帧
+        vel = vel * 0.6 + delta * 0.4;
+      } else {
+        energy *= ENERGY_DOWN;
+        vel *= 0.72;
+      }
+      if (energy < 0.01) energy = 0;
+
+      const goal = Math.max(-TILT_MAX, Math.min(TILT_MAX, vel * TILT_K));
+      tilt += (goal - tilt) * 0.28;
+
       syncEdges();
       syncDepth();
       syncActive();
       syncKnob();
+
+      // 停下以后还要把「筒 → 平铺」这一段演完，所以只要还有能量就继续要帧。
+      // 阈值放在 0.01 / 0.05 度：再小肉眼看不出，白跑一帧不如停
+      if (energy > 0 || Math.abs(tilt) > 0.05) schedule();
     };
+
     const schedule = () => {
-      if (queued) return;
-      queued = true;
-      requestAnimationFrame(sync);
+      if (frame) return;
+      frame = requestAnimationFrame(tick);
     };
     const relayout = () => {
       layoutRail();
       // 窗口高度变了，每行离中心的距离全变；字体加载完行高也会变。
-      // 量的同时会把上一帧的变换清零，所以后面必须紧跟一次 sync
+      // 量的同时会把上一帧的变换清零，所以后面必须紧跟一次 tick
       measureRows();
       schedule();
     };
@@ -514,10 +584,14 @@ for (const post of posts) {
     // 传统形态里圆桶的变量没有意义（没有窗口、没有筒），必须清掉：
     // 留着的话切回窗口时第一帧还是上一次算出来的形变
     const clearDepth = () => {
+      energy = 0;
+      vel = 0;
+      tilt = 0;
       for (const item of items) {
         item.style.removeProperty('--cyl-y');
         item.style.removeProperty('--cyl-s');
         item.style.removeProperty('--cyl-o');
+        item.style.removeProperty('--cyl-t');
       }
     };
 
@@ -531,9 +605,12 @@ for (const post of posts) {
       }
       if (view === 'plain') {
         clearDepth();
-        // 窗口不再滚动，旧 scrollTop 留着的话切回来位置会莫名其妙
+        // 窗口不再滚动，旧 scrollTop 留着的话切回来位置会莫名其妙。
+        // 注意这一句本身会派发一次 scroll 事件（tick 里 isPlain 时直接返回），
+        // 所以 energy 必须在这里手动归零，别指望下一帧自己衰减
         scroller.scrollTop = 0;
       } else {
+        lastTop = scroller.scrollTop;
         relayout();
       }
     };

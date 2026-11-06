@@ -1696,19 +1696,16 @@ button.more-link {
   text-decoration: underline;
 }
 
-/* 分类（2026-11-06）：只在「传统」形态露出来，窗口形态一行只留日期/字数/标题。
+/* 分类（2026-11-06）：两种形态都显示。
    靠 margin-left: auto 推到行尾 —— 标题长短不一时，右侧那列分类会自己对齐成一条线，
-   比紧跟标题好扫。窄到放不下时整组折到下一行（.archive-item 本来就是 flex-wrap）。 */
+   比紧跟标题好扫。窄到放不下时整组折到下一行（.archive-item 本来就是 flex-wrap）。
+   颜色走 .tag 自己的品牌绿，和首页卡片上的分类是同一颗胶囊，没有再分「归档版」 */
 .archive-cat {
-  display: none;
+  display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 0.3rem;
   margin-left: auto;
-}
-
-html[data-archive-view='plain'] .archive-cat {
-  display: inline-flex;
 }
 
 /* 行内的胶囊比别处小一档：它跟标题挤在同一行里，0.78rem 会跟标题抢视线 */
@@ -2297,6 +2294,11 @@ html[data-archive-view='plain'] .archive-cat {
   /* 藏滚动条：这是一条胶片，不是一个下拉框。
      滚轮 / 触摸 / 方向键都还在，入口提示交给上下渐隐 */
   scrollbar-width: none;
+  /* 给滚动时的卡片倾斜用（--cyl-t 的 rotateX）。
+     没有透视的话 rotateX 只会把卡片压扁，有了才看得出「往前翻」。
+     距离取得比较近（650px，约等于一臂之内）：卡片才 48px 高，视点放太远，
+     上下两条边在投影里几乎一样宽，倾角看等于没做。 */
+  perspective: 650px;
 }
 
 .film-scroll::-webkit-scrollbar {
@@ -2424,27 +2426,37 @@ html[data-archive-view='plain'] .film .archive-item:hover {
  * 整条时间轴当成一根**横放的圆柱**，每一行贴在筒壁上：
  * 正对读者的那一段最宽最清楚，越靠近上下两端越窄、越淡 —— 显得筒在那儿转。
  *
+ * ⚠️ 筒只在**滚动的时候**成立：不滚动时所有行摊平（等宽、全不透明、不倾斜），
+ * 就是一份普通的卡片列表。脚本用一个 energy 系数（滚动时爬到 1、停下后衰减
+ * 回 0）把三个形变量整体缩放，摊平与成筒之间是连续的，不是「啪」地切换。
+ * 为什么这么改：静止时每行都按离中心的距离缩一遍，读者停在页面上一看
+ * 是一张「近大远小」的图，读起来费劲；筒应该是滚动的产物，不是静止的样子。
+ *
  * 变换同时挂在卡片和日期上，各算各的 θ：一天里左边日期和右边卡片是两列，
  * 只弯卡片的话日期会留在原地，两边的基线就错开；而只按「一天一组」整组弯，
  * 一天六篇的那种会变成一块僵直的板（组内角度差 0.67 弧度，够看出来了）。
  *
- * 三个变量都由页面脚本逐帧写（见 syncDepth）：
+ * 四个变量都由页面脚本逐帧写（见 syncDepth）：
  *   --cyl-y  纵向位移（筒面投影与平面位置的差）
  *   --cyl-s  缩放（= cos θ，两端变窄）
  *   --cyl-o  不透明度（最淡停在 0.35，不再往下掉）
- * 没有 JS 时三个都取默认值：位置不动、不缩放、全不透明，等于没这个效果。
+ *   --cyl-t  整筒的倾角（度）。跟着滚动速度走：往下滚，卡片像被筒带着往前
+ *            翻一点；往上滚反过来。停下速度归零，倾角也回正
+ * 没有 JS 时四个都取默认值：位置不动、不缩放、不倾斜、全不透明，等于没这个效果。
  *
- * ⚠️ transition 只给 transform/opacity，且要短：脚本每帧都在改这三个值，
- * transition 太长会让卡片「追不上」滚动。
+ * ⚠️ transform / opacity 不挂 transition：这四个值每帧都在被脚本改写，
+ * 再叠一层过渡等于给每帧都套一次低通，卡片会「追不上」滚动，停下后摊平也变慢。
+ * 过渡只留给悬停的颜色和阴影。
  */
 .film .archive-item,
 .film .archive-date {
-  transform: translateY(var(--cyl-y, 0px)) scale(var(--cyl-s, 1));
+  transform: translateY(var(--cyl-y, 0px)) scale(var(--cyl-s, 1))
+    rotateX(var(--cyl-t, 0deg));
   transform-origin: center;
   opacity: var(--cyl-o, 1);
   transition:
-    transform 0.1s ease-out,
-    opacity 0.1s ease-out;
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 /* 卡片之间留缝：同一天的多篇、跨天的、跨月的都要 */
@@ -2465,7 +2477,8 @@ html[data-archive-view='plain'] .film .archive-item:hover {
   box-shadow:
     inset 0 0 0 1px var(--line-strong),
     var(--shadow-card-hover);
-  transform: translateY(calc(var(--cyl-y, 0px) - 2px)) scale(var(--cyl-s, 1));
+  transform: translateY(calc(var(--cyl-y, 0px) - 2px)) scale(var(--cyl-s, 1))
+    rotateX(var(--cyl-t, 0deg));
   opacity: 1;
 }
 
