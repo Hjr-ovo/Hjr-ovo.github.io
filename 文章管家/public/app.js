@@ -364,6 +364,29 @@ function bindTheme() {
   });
 }
 
+// 退出管家（2026-11-06）。
+// 启动器把控制台藏了，这个按钮就是唯一的停止入口 —— 点完服务端 process.exit，
+// 页面这边再点任何东西都是「无法连接」，所以退出后直接把内容换成一句话。
+function bindQuit() {
+  const btn = $('btnQuit');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    if (!confirm('退出后这个页面就打不开了。要再开请双击「文章管家.bat」。')) return;
+    // 有没存的改动就先别退，跟侧栏切页的处理保持一致
+    if (state.dirty && !confirm('当前这篇还没保存，退出后改动会丢。确定退出？')) return;
+    btn.disabled = true;
+    try {
+      await api('/api/quit', { method: 'POST' });
+    } catch {
+      /* 服务端可能已经先断开了，下面这句提示照旧 */
+    }
+    document.body.innerHTML =
+      '<div class="empty" style="margin:auto;padding:64px 24px;text-align:center">' +
+      '文章管家已退出<br><br>这个标签页可以关掉了。' +
+      '</div>';
+  });
+}
+
 // ---------- 状态栏 ----------
 
 async function loadStatus() {
@@ -1734,6 +1757,7 @@ function bind() {
   bindDrag();
   bindCtx();
   bindTheme();
+  bindQuit();
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {

@@ -1,22 +1,22 @@
 @echo off
 chcp 65001 >nul
-title 文章管家 - 关掉这个窗口就停止
 
 REM ============================================================
 REM  Double-click to open the blog post manager.
 REM
-REM  What it does:
-REM    1. Find node.exe / npm.cmd by absolute path (PATH may hold another)
-REM    2. Start the blog dev server in a SEPARATE MINIMIZED window
-REM       (skipped when port 4321 is already listening)
-REM    3. Run the manager server in THIS window; it opens the browser
-REM       once the port really answers
+REM  It runs WITHOUT a console window: this bat hands the job to
+REM  launch-hidden.vbs, which re-runs the same file with
+REM  "--run --hidden" in a window that is never shown.
 REM
-REM  To STOP: close this window -> the manager stops.
-REM  The blog keeps running in its own window; close that one too.
+REM  Need the black window back (to read errors / logs)?
+REM      cmd /c 文章管家.bat --run
+REM  Without --hidden the pauses and echoes stay, and the window
+REM  closes only when you press a key.
+REM
+REM  To STOP the manager: button at the top right of the web page.
 REM
 REM  NOTE: comments below are ASCII on purpose. Chinese text inside
-REM  REM lines breaks under code page 65001 (BUG-008): cmd.exe can
+REM  a REM line breaks under code page 65001 (BUG-008): cmd.exe can
 REM  swallow the REM prefix and then try to run the comment.
 REM  Chinese IS fine inside echo lines.
 REM
@@ -29,7 +29,32 @@ REM  multi-byte char inside a block can bleed into the next line and
 REM  that line gets executed as a command. Use labels (goto) instead.
 REM ============================================================
 
+if /i "%~1"=="--run" goto :run
+
+REM ---- normal double-click: relaunch hidden, then get out -----
+REM If the launcher went missing, fall through to a normal visible run
+REM rather than dying silently.
+if not exist "%~dp0launch-hidden.vbs" goto :run
+REM wscript.exe has no console of its own, so the copy it starts is
+REM genuinely invisible (not even a taskbar button). The vbs waits
+REM for that copy to exit so it can report a failed start.
+wscript //nologo "%~dp0launch-hidden.vbs" "%~f0"
+if errorlevel 1 goto :no_wscript
+exit /b 0
+
+:no_wscript
+echo.
+echo   [ERROR] launch-hidden.vbs could not be started.
+echo   Run this file with --run to see the details.
+echo.
+pause
+exit /b 1
+
+:run
+REM ---- real work starts here -----------------------------------
 setlocal
+set "HIDDEN=0"
+if /i "%~2"=="--hidden" set "HIDDEN=1"
 
 set "NODE=C:\Program Files\nodejs\node.exe"
 set "NPM=C:\Program Files\nodejs\npm.cmd"
@@ -60,14 +85,14 @@ if not exist "%NODE%" (
     echo.
     echo   Please install Node.js first, then double-click this file again.
     echo.
-    pause
+    call :hold
     exit /b 1
 )
 
 cd /d "%~dp0"
 
 REM ---- start the blog preview too (separate minimized window) ----
-REM  Why a separate window: this window is blocked by the manager
+REM  Why a separate window: this process is taken by the manager
 REM  server, and one cmd window cannot host two long-running
 REM  processes. Port check first, so double-clicking twice never
 REM  starts a second dev server (they would fight over 4321).
@@ -95,11 +120,23 @@ set "OPEN_BROWSER=1"
 echo.
 echo   文章管家启动中，浏览器会自动打开 http://127.0.0.1:5678/
 echo   博客预览在另一个最小化的窗口里，地址 http://localhost:4321/
-echo   关掉本窗口管家就停；博客那个窗口要单独关。
+echo   停止管家：点页面右上角的「退出」。
 echo.
 
 "%NODE%" "文章管家\src\server.mjs"
+set "CODE=%ERRORLEVEL%"
 
 echo.
-echo   已经停止了。按任意键关闭窗口。
+if not "%CODE%"=="0" echo   启动失败（退出码 %CODE%）。
+if "%CODE%"=="0" echo   已经停止了。
+call :hold
+exit /b %CODE%
+
+REM ---- helpers -------------------------------------------------
+:hold
+REM Hidden runs have no window to press a key in: bail out instead
+REM of waiting forever (the vbs would block on us).
+if "%HIDDEN%"=="1" exit /b 0
+echo   按任意键关闭窗口。
 pause >nul
+exit /b 0

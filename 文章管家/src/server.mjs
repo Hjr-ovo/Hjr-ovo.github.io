@@ -92,6 +92,16 @@ async function handleApi(req, res, url) {
     return json(res, 200, { dev, blogUrl: BLOG_URL, today: tx.today, postsDir: (await import('./posts.mjs')).POSTS_DIR });
   }
 
+  // 退出管家（2026-11-06）。
+  // 窗口藏起来之后就没有「关掉这个窗口」这个动作了，页面右上角要留一个出口，
+  // 否则只剩任务管理器一条路。先回包再退出，不然浏览器会看到连接被掐断。
+  // 只退管家，不碰博客预览（那是另一个进程，有自己的窗口）。
+  if (req.method === 'POST' && url.pathname === '/api/quit') {
+    json(res, 200, { ok: true });
+    setTimeout(() => process.exit(0), 200);
+    return;
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/posts') {
     const data = await listPosts();
     return json(res, 200, data);
@@ -307,7 +317,9 @@ server.listen(PORT, HOST, () => {
   console.log('');
   console.log('  文章管家已启动');
   console.log(`  地址：http://${HOST}:${PORT}/`);
-  console.log('  关掉这个窗口就停止。');
+  // 窗口现在是隐藏的（启动器见根目录 launch-hidden.vbs），
+  // 所以别再提示「关掉窗口」—— 停靠页面右上角的「退出」。
+  console.log('  停止：点页面右上角的「退出」。');
   console.log('');
 
   // 端口真的就绪之后才开浏览器（bat 里设 OPEN_BROWSER=1）。
@@ -319,10 +331,14 @@ server.listen(PORT, HOST, () => {
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(`\n  端口 ${PORT} 被占用了 —— 可能管家已经在另一个窗口里开着。`);
-    console.error(`  直接打开 http://${HOST}:${PORT}/ 试试。\n`);
-  } else {
-    console.error('\n  启动失败：', err.message, '\n');
+    // 管家已经在别处开着（多半就是上一次双击没关）。
+    // 窗口藏起来之后没人能看见这段文字，报错弹窗只会让人以为坏了 ——
+    // 直接把已有的那个页面调出来，然后以 0 退出，启动器那边就不弹提示了。
+    console.error(`\n  端口 ${PORT} 已被占用，应该已经开着一个了。`);
+    console.error(`  已帮你打开 http://${HOST}:${PORT}/\n`);
+    exec(`start "" "http://${HOST}:${PORT}/"`, { windowsHide: true }, () => {});
+    process.exit(0);
   }
+  console.error('\n  启动失败：', err.message, '\n');
   process.exit(1);
 });
