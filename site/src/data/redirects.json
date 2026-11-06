@@ -1,6 +1,11 @@
 {
   "_说明": "改名后「旧地址 → 新地址」对照表，由博客后台工具在改名时自动追加（ADR-011）。key 必须是已不存在的地址，否则会顶掉真页面。",
   "redirects": {
-    "/posts/two-sum": "/posts/1-two-sum/"
+    "/posts/two-sum": "/posts/1-two-sum/",
+    "/posts/post-2026-11-04-3": "/posts/1-software-engineering/",
+    "/posts/post-2026-11-04-3-2": "/posts/2-1-process-model/",
+    "/posts/post-2026-11-04-3-3": "/posts/2-2-agility-development/",
+    "/posts/post-2026-11-04-3-4": "/posts/3-understanding-requirements/",
+    "/posts/post-2026-11-05": "/posts/4-requirement-modelling/"
   }
 }
