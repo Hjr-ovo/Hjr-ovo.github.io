@@ -759,11 +759,15 @@ table {
   border-collapse: collapse;
   font-size: 0.92rem;
   margin: 0;
-  /* 外圈一圈品牌绿（2026-11-06）。
+  /* 外圈一圈浅品牌绿（2026-11-06；同日调浅一档）。
      不能写 border：collapse 模式下表格自己的边框和单元格边框在同一个位置上
      打架，冲突规则里单元格胜出，绿线会被 th/td 的灰线盖掉。所以用 outline ——
-     它画在边框盒上、不占布局。offset -1px 正好压住外沿那 1px 灰线 */
-  outline: 1px solid var(--accent);
+     它画在边框盒上、不占布局。offset -1px 正好压住外沿那 1px 灰线。
+
+     调浅靠 color-mix 掺透明而不是掺白：深色模式下的 accent 是亮薄荷绿
+     （#6ed3ad），掺白会越掺越白发灰、比原色还抢眼；掺透明是让底下的纸色
+     透上来，浅色下变淡、深色下变暗，两边都是「退到背景里」的同一件事 */
+  outline: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
   outline-offset: -1px;
 }
 
