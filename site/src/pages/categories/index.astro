@@ -12,12 +12,13 @@ import { formatDate, isoDate } from '../../utils/format-date';
 import { CATEGORY_DESC } from '../../data/categories';
 import SortBar from '../../components/SortBar.astro';
 
-// 卡片排序。默认「按篇数」就是下面渲染出来的顺序（篇数多的在前，
-// 同篇数最近更新的在前），另外两种是给读者的备选。
+// 卡片排序。第一项「最近更新」就是下面渲染出来的顺序（2026-11-06 从「按篇数」
+// 换过来），另外两种是给读者的备选。这个顺序和 SortBar 的 initial 必须一致，
+// 否则第一颗按钮不是高亮状态，页面还得先按篇数画一遍再用 JS 重排。
 const SORT_OPTIONS = [
-  { value: 'count', label: '按篇数' },
   { value: 'latest', label: '最近更新' },
   { value: 'title', label: '按名称' },
+  { value: 'count', label: '按篇数' },
 ];
 
 const posts = await getCollection('posts', ({ data }) => !data.draft);
@@ -33,7 +34,8 @@ for (const post of posts) {
 }
 
 // 转成数组：分类名、文章数、最近发布日期。
-// 排序规则：文章多的在前；数量相同则最近更新的在前。
+// 排序规则：最近更新的在前；同一天更新的按篇数多的在前（并列时给个稳定的次序，
+// 不然同一批分类每次构建的先后可能飘）。
 const categories = [...groups.entries()]
   .map(([name, list]) => ({
     name,
@@ -43,7 +45,7 @@ const categories = [...groups.entries()]
       list[0].data.pubDate,
     ),
   }))
-  .sort((a, b) => b.count - a.count || b.latest.valueOf() - a.latest.valueOf());
+  .sort((a, b) => b.latest.valueOf() - a.latest.valueOf() || b.count - a.count);
 
 // 顶部「共 X 个分类、Y 篇文章」里的 Y，只算**真的归了分类**的文章。
 // 分类是可以没有的（2026-11-01 起 categories 允许为空），拿全部文章去数就会出现
@@ -62,7 +64,7 @@ const categorizedCount = posts.filter((post) => post.data.categories.length > 0)
     <SortBar
       target="#cat-grid"
       storageKey="sort:categories"
-      initial="count"
+      initial="latest"
       options={SORT_OPTIONS}
       label="分类排序"
     />
