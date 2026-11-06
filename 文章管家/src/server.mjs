@@ -8,7 +8,7 @@ import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { exec } from 'node:child_process';
+import { exec, execSync } from 'node:child_process';
 
 import { listPosts, readPost, savePost, updateTerms, taxonomy, createTerm, renameTerm, deleteTerm, setCategoryDesc, moveToTrash, listTrash, restoreTrash, purgeTrash } from './posts.mjs';
 import { analyze, writePost, existingCategories } from './ingest.mjs';
@@ -82,6 +82,63 @@ function probeDev() {
   });
 }
 
+// ---------- 收摊 ----------
+//
+// 2026-11-06：管家和博客预览都不再占窗口，于是「关掉窗口」这个停止动作消失了。
+// 现在有三条收尾路径，都走 shutdown()：页面上的「退出」按钮、关掉浏览器标签、
+// 以及（启动器那边）进程被直接结束。
+//
+// 博客预览是启动脚本用隐藏方式拉起来的，属于「这次打开带起来的东西」，
+// 管家收摊时一起关掉，不然会留一个谁也看不见的 node 常驻。
+// 按端口找而不是记 PID：npm.cmd → cmd → node 中间隔了两层，记下来的 PID 是壳，
+// 壳死了子进程还活着。4321 上只会有一个 astro dev（启动前查过）。
+
+// 刷新页面也会触发卸载事件，所以退出要留出几秒让人撤回
+const EXIT_GRACE = 5000;
+let exitTimer = null;
+
+function scheduleExit() {
+  if (exitTimer) return;
+  exitTimer = setTimeout(() => shutdown(0), EXIT_GRACE);
+  // 定时器不该拖住进程退出
+  if (typeof exitTimer.unref === 'function') exitTimer.unref();
+}
+
+function cancelExit() {
+  if (!exitTimer) return;
+  clearTimeout(exitTimer);
+  exitTimer = null;
+}
+
+function stopDev() {
+  let out = '';
+  try {
+    out = execSync('netstat -ano -p TCP', { encoding: 'utf8', windowsHide: true });
+  } catch {
+    return;
+  }
+  const pids = new Set();
+  for (const line of out.split(/\r?\n/)) {
+    if (!/LISTENING/i.test(line) || !/:4321\s/.test(line)) continue;
+    const pid = line.trim().split(/\s+/).pop();
+    if (pid && pid !== '0') pids.add(pid);
+  }
+  for (const pid of pids) {
+    try {
+      // /T 连子进程一起杀：只杀监听的那个，npm 起的中间层还留着
+      execSync(`taskkill /T /F /PID ${pid}`, { stdio: 'ignore', windowsHide: true });
+    } catch {
+      /* 已经没了 */
+    }
+  }
+}
+
+function shutdown(code = 0) {
+  cancelExit();
+  stopDev();
+  process.exit(code);
+}
+
 // ---------- 路由 ----------
 
 async function handleApi(req, res, url) {
@@ -95,11 +152,24 @@ async function handleApi(req, res, url) {
   // 退出管家（2026-11-06）。
   // 窗口藏起来之后就没有「关掉这个窗口」这个动作了，页面右上角要留一个出口，
   // 否则只剩任务管理器一条路。先回包再退出，不然浏览器会看到连接被掐断。
-  // 只退管家，不碰博客预览（那是另一个进程，有自己的窗口）。
   if (req.method === 'POST' && url.pathname === '/api/quit') {
     json(res, 200, { ok: true });
-    setTimeout(() => process.exit(0), 200);
+    setTimeout(() => shutdown(0), 200);
     return;
+  }
+
+  // 关掉浏览器就停（2026-11-06）。页面卸载时 sendBeacon 一枪，这里不立刻退，
+  // 先挂一个几秒的定时器 —— 刷新也会触发卸载，新页面加载时会调 /api/alive 把它撤掉。
+  // 没撤掉就说明标签是真关了，到点收摊。
+  if (req.method === 'POST' && url.pathname === '/api/bye') {
+    json(res, 200, { ok: true });
+    scheduleExit();
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/alive') {
+    cancelExit();
+    return json(res, 200, { ok: true });
   }
 
   if (req.method === 'GET' && url.pathname === '/api/posts') {
@@ -318,8 +388,8 @@ server.listen(PORT, HOST, () => {
   console.log('  文章管家已启动');
   console.log(`  地址：http://${HOST}:${PORT}/`);
   // 窗口现在是隐藏的（启动器见根目录 launch-hidden.vbs），
-  // 所以别再提示「关掉窗口」—— 停靠页面右上角的「退出」。
-  console.log('  停止：点页面右上角的「退出」。');
+  // 所以别再提示「关掉窗口」—— 停靠关浏览器标签，或者点页面右上角的「退出」。
+  console.log('  停止：关掉浏览器标签，或点页面右上角的「退出」。');
   console.log('');
 
   // 端口真的就绪之后才开浏览器（bat 里设 OPEN_BROWSER=1）。
@@ -342,3 +412,9 @@ server.on('error', (err) => {
   console.error('\n  启动失败：', err.message, '\n');
   process.exit(1);
 });
+
+// 可见模式（cmd /c 文章管家.bat --run）里 Ctrl+C 也要把博客预览一起收掉，
+// 否则那个隐藏的 dev 会留在后台没人管。
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => shutdown(0));
+}

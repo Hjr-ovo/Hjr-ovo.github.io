@@ -387,6 +387,50 @@ function bindQuit() {
   });
 }
 
+// 关掉浏览器就停（2026-11-06）。
+//
+// 卸载时打一枪 /api/bye，服务端不立刻退，先等 5 秒。这 5 秒里页面要是重新
+// 加载了（刷新、前进后退、从 bfcache 回来），新页面一上来就调 /api/alive
+// 把这一脚刹车踩回去 —— 所以只有「真的关了标签」才会走到退出。
+// 开着第二个标签时：被关的那个广播一声，活着的那个替它踩刹车。
+function bindLifecycle() {
+  const alive = () => api('/api/alive', { method: 'POST' }).catch(() => {});
+  alive();
+
+  let bus = null;
+  try {
+    bus = new BroadcastChannel('mgr-lifecycle');
+  } catch {
+    /* 老浏览器没有 BroadcastChannel：多标签同时开时会跟着退，单标签不受影响 */
+  }
+  if (bus) {
+    bus.addEventListener('message', (e) => {
+      if (e.data === 'bye') alive();
+    });
+  }
+
+  const bye = () => {
+    try {
+      // sendBeacon 在页面已经销毁时也发得出去，fetch 不行
+      navigator.sendBeacon('/api/bye');
+    } catch {
+      /* 发不出去就留着后台，下次双击会复用 */
+    }
+    try {
+      bus && bus.postMessage('bye');
+    } catch {
+      /* 同上 */
+    }
+  };
+
+  // pagehide 比 beforeunload 覆盖得全：关标签、刷新、bfcache 都会走
+  window.addEventListener('pagehide', bye);
+  // 从 bfcache 回来的页面不会重跑脚本，得自己再报一次到
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) alive();
+  });
+}
+
 // ---------- 状态栏 ----------
 
 async function loadStatus() {
@@ -1758,6 +1802,7 @@ function bind() {
   bindCtx();
   bindTheme();
   bindQuit();
+  bindLifecycle();
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {

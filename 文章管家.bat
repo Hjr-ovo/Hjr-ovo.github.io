@@ -13,7 +13,9 @@ REM      cmd /c 文章管家.bat --run
 REM  Without --hidden the pauses and echoes stay, and the window
 REM  closes only when you press a key.
 REM
-REM  To STOP the manager: button at the top right of the web page.
+REM  To STOP: close the browser tab, or press the button at the top
+REM  right of the page. Either one shuts the manager AND the blog
+REM  preview down (the manager owns the dev server it started).
 REM
 REM  NOTE: comments below are ASCII on purpose. Chinese text inside
 REM  a REM line breaks under code page 65001 (BUG-008): cmd.exe can
@@ -101,8 +103,10 @@ netstat -ano | findstr ":4321 " | findstr "LISTENING" >nul
 if not errorlevel 1 goto :blog_running
 if not exist "%~dp0site\node_modules" goto :blog_no_modules
 
-echo   正在顺带启动博客预览（最小化窗口，约 10 秒就好）...
-start "博客本地预览" /min /d "%~dp0site" "%NPM%" run dev
+echo   正在顺带启动博客预览（无窗口，约 10 秒就好）...
+REM Hidden too: the script host has no console of its own, so the dev
+REM server leaves nothing on screen either. Third arg = working directory.
+wscript //nologo "%~dp0launch-hidden.vbs" "%NPM%" blog "%~dp0site"
 goto :blog_done
 
 :blog_no_modules
@@ -119,8 +123,8 @@ set "OPEN_BROWSER=1"
 
 echo.
 echo   文章管家启动中，浏览器会自动打开 http://127.0.0.1:5678/
-echo   博客预览在另一个最小化的窗口里，地址 http://localhost:4321/
-echo   停止管家：点页面右上角的「退出」。
+echo   博客预览已经在后台起来了，地址 http://localhost:4321/
+echo   停止：点页面右上角的「退出」，或者直接把浏览器标签关掉。
 echo.
 
 "%NODE%" "文章管家\src\server.mjs"
