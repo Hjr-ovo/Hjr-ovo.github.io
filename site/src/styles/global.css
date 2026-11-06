@@ -302,17 +302,31 @@ main {
  * 现在字重分档 700 / 700 / 600 / 600，字号各提一档 ——
  * 标题是唯一能被"跳着读"命中的东西，值得这几十毫秒的视觉停顿。
  */
-h1, h2, h3, h4 {
+h1, h2, h3, h4, h5, h6 {
   line-height: 1.35;
   color: var(--ink);
   letter-spacing: -0.01em; /* 中英混排时收紧一点，看着更实 */
   margin: 2em 0 0.6em;
 }
 
-h1 { font-size: 1.85rem; font-weight: 700; margin-top: 0; }
-h2 { font-size: 1.45rem; font-weight: 700; }
-h3 { font-size: 1.2rem; font-weight: 600; }
-h4 { font-size: 1.05rem; font-weight: 600; }
+/* 六级标题的字号（2026-11-06 重划）
+ *
+ * 用户要求：六级与正文同大，一到五级都比正文大。
+ * 原来只定到 h4（1.05），h5/h6 掉回浏览器默认（0.83 / 0.67rem），
+ * 比正文还小 —— 正文里用 `#####` 写的标题看着像缩水的备注。
+ *
+ * 现在是 1.9 / 1.5 / 1.32 / 1.18 / 1.08 / 1（正文 1rem）。
+ * 相邻两级差 0.4 / 0.18 / 0.14 / 0.10 / 0.08，越往下越密 ——
+ * 六级本来就不该靠字号区分，它靠的是「比正文重」这一点；
+ * h6 与正文同号，所以字重压到 700、颜色用 --ink（正文是 --ink 但 400 字重），
+ * 一眼仍能看出是一行标题而不是段落。
+ */
+h1 { font-size: 1.9rem; font-weight: 700; margin-top: 0; }
+h2 { font-size: 1.5rem; font-weight: 700; }
+h3 { font-size: 1.32rem; font-weight: 600; }
+h4 { font-size: 1.18rem; font-weight: 600; }
+h5 { font-size: 1.08rem; font-weight: 600; }
+h6 { font-size: 1rem; font-weight: 700; }
 
 /* 正文里的 h2（= 文章的主要章节）额外挂一根绿条。
  * 只靠字号和字重，h2 和「加粗的段落」在长文里还是会混；竖条是最省地方、
