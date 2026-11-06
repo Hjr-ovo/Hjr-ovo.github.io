@@ -40,6 +40,10 @@
     0 8px 20px rgba(15, 110, 86, 0.08);
 
   --maxw: 46rem;
+  /* 归档页专用的一档：那一页全是「日期 + 字数 + 标题」的短行，
+     46rem 是按一段两百字的正文定的舒适行宽，放到列表上就偏窄。
+     页头/页脚跟着一起放宽，不然上下两端的对齐会错开半个指头。 */
+  --maxw-wide: 54rem;
   --font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
 
@@ -158,6 +162,13 @@ body {
   max-width: var(--maxw);
   margin: 0 auto;
   padding: 0 1.25rem;
+}
+
+/* 宽一档的页面（归档）。只管 .wrap 的 max-width，
+   内边距和各页自己的排版一概不动 —— 窄屏下 max-width 本来就不起作用，
+   所以这条规则在手机上没有任何影响 */
+body.is-wide .wrap {
+  max-width: var(--maxw-wide);
 }
 
 .site-header {
@@ -2277,11 +2288,11 @@ button.more-link {
   display: none;
 }
 
-/* ---------- 归档页的「整页」视图（2026-11-06） ----------
+/* ---------- 归档页的「传统」视图（2026-11-06，原名「整页」） ----------
  * 把窗口那层壳整个撤掉：留白 / 边框 / 圆角 / 阴影归零，滚动区取消限高，
- * 上下渐隐和左侧月份列一并隐藏 —— 回到 11-05 之前那版传统归档页。
- * 卡片本身留着（两种形态之间切换时行不会突然变样，眼睛不用重新适应），
- * 只是不再有过片效果：--film-k 由脚本清掉，CSS 回落到 1，全部清楚。
+ * 上下渐隐和左侧月份列一并隐藏 —— 回到 2026-11-05 之前那版传统归档页。
+ * 卡片也要撤掉（见下面 .film .archive-item 那组）：传统形态就是一行挨一行的
+ * 列表，白底圆角一留在整页上就成了一张张卡片，那不叫「传统」。
  *
  * 选择器挂在 <html> 上而不是 .film：首帧由页面顶部那段内联脚本按
  * localStorage 设好，等打包脚本跑起来时窗口还没画出来，不会闪。
@@ -2309,6 +2320,35 @@ html[data-archive-view='plain'] .film-fade {
 html[data-archive-view='plain'] .film-scroll {
   max-height: none;
   overflow: visible;
+  /* 窗口那圈「留着卡片阴影」的边在这里只会让正文比页头窄 0.4rem */
+  padding: 0;
+}
+
+/* 传统形态的行：不浮、不描边、不留缝。负外边距还回去，
+   悬停底色才能延伸到文字两侧（窗口形态为了让卡片不贴边把它收成了 0）。
+   --film-k 归 1：脚本在切形态时已经清掉它，这里再兜一次，
+   免得带 localStorage='plain' 直接进页面时第一帧是半透明的。 */
+html[data-archive-view='plain'] .film .archive-item {
+  margin: 0 -0.55rem;
+  padding: 0.45rem 0.55rem;
+  background: none;
+  border-radius: 8px;
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
+}
+
+html[data-archive-view='plain'] .film .archive-item + .archive-item,
+html[data-archive-view='plain'] .film .timeline-day + .timeline-day {
+  margin-top: 0;
+}
+
+/* 悬停只给一层浅底，不抬起来 —— 传统列表里行往上跳会打断竖排的扫描线 */
+html[data-archive-view='plain'] .film .archive-item:hover {
+  background: var(--bg-card);
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
 }
 
 /* 上下渐隐：盖在内容上，但不吃点击 */

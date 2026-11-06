@@ -98,7 +98,7 @@ for (const post of posts) {
 }
 ---
 
-<BaseLayout title="归档" description="所有文章的归档，按月份排在时间轴上。">
+<BaseLayout title="归档" description="所有文章的归档，按月份排在时间轴上。" wide>
   {/* 视图偏好要在第一帧就定下来：等打包脚本跑到这里，窗口已经按默认形态
       画出来了，再切成「整页」会明显闪一下。内联执行、只写一个属性，很便宜 */}
   <script is:inline>
@@ -116,16 +116,17 @@ for (const post of posts) {
       <p class="page-desc">共 {posts.length} 篇。</p>
     </div>
 
-    {/* 两种形态：默认是定高的胶片窗口（翻着看），「整页」把窗口拆掉、
-        时间轴一次铺到底，就是 2026-11-05 之前那种传统归档页。
-        按钮复用排序栏的样式 —— 同一套「一排小胶囊里选一个」的语言 */}
+    {/* 两种形态：默认是定高的胶片窗口（翻着看），「传统」把窗口拆掉、
+        回到一根竖线贯穿到底的老式归档页 —— 没有卡片、没有浮起，
+        整页就是一条列表。按钮复用排序栏的样式 ——
+        同一套「一排小胶囊里选一个」的语言 */}
     {posts.length > 0 && (
       <div class="sort-bar" data-view-bar role="group" aria-label="切换归档视图">
         <button type="button" class="sort-btn" data-view="window" title="定高窗口，翻着看">
           窗口
         </button>
-        <button type="button" class="sort-btn" data-view="plain" title="一次展开到底">
-          整页
+        <button type="button" class="sort-btn" data-view="plain" title="一条竖线铺到底的传统列表">
+          传统
         </button>
       </div>
     )}
