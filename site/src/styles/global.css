@@ -751,6 +751,13 @@ table {
   margin: 1.2em 0;
   display: block;
   overflow-x: auto;
+  /* 外圈一圈品牌绿（2026-11-06）。
+     不能写 border：collapse 模式下表格自己的边框和单元格边框在同一个位置上
+     打架，冲突规则里单元格胜出，绿线会被 th/td 的灰线盖掉。所以用 outline ——
+     它画在边框盒上、不占布局，也不跟着 overflow 的内容滚走，
+     表格横向滚动时外框还留在原处。offset -1px 正好压住外沿那 1px 灰线 */
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
 
 th, td {
@@ -2450,22 +2457,24 @@ html[data-archive-view='plain'] .film .archive-item:hover {
  * 只弯卡片的话日期会留在原地，两边的基线就错开；而只按「一天一组」整组弯，
  * 一天六篇的那种会变成一块僵直的板（组内角度差 0.67 弧度，够看出来了）。
  *
- * 四个变量都由页面脚本逐帧写（见 syncDepth）：
+ * 三个变量都由页面脚本逐帧写（见 syncDepth）：
  *   --cyl-y  纵向位移（筒面投影与平面位置的差）
- *   --cyl-s  缩放（= cos θ，两端变窄）
  *   --cyl-o  不透明度（最淡停在 0.35，不再往下掉）
- *   --cyl-t  整筒的倾角（度）。跟着滚动速度走：往下滚，卡片像被筒带着往前
- *            翻一点；往上滚反过来。停下速度归零，倾角也回正
- * 没有 JS 时四个都取默认值：位置不动、不缩放、不倾斜、全不透明，等于没这个效果。
+ *   --cyl-t  卡片绕 X 轴的转角（度）。卡片是贴在外筒壁上的：窗口上半边那些
+ *            顶边往后倒、下半边那些底边往后倒，一圈看下来筒在转
+ * 没有 JS 时三个都取默认值：位置不动、不倾斜、全不透明，等于没这个效果。
  *
- * ⚠️ transform / opacity 不挂 transition：这四个值每帧都在被脚本改写，
+ * ⚠️ 已经没有 --cyl-s 了（2026-11-06 去掉）。旧版按 cosθ 压宽度，那是**竖着**
+ * 放的筒才有的行为；横放的筒卡片绕水平轴转，宽度根本不该变 —— 真正变的是
+ * 上下两条边被透视拉成梯形。压宽度只会让标题早折行，读起来更差。
+ *
+ * ⚠️ transform / opacity 不挂 transition：这三个值每帧都在被脚本改写，
  * 再叠一层过渡等于给每帧都套一次低通，卡片会「追不上」滚动，停下后摊平也变慢。
  * 过渡只留给悬停的颜色和阴影。
  */
 .film .archive-item,
 .film .archive-date {
-  transform: translateY(var(--cyl-y, 0px)) scale(var(--cyl-s, 1))
-    rotateX(var(--cyl-t, 0deg));
+  transform: translateY(var(--cyl-y, 0px)) rotateX(var(--cyl-t, 0deg));
   transform-origin: center;
   opacity: var(--cyl-o, 1);
   transition:
@@ -2491,8 +2500,7 @@ html[data-archive-view='plain'] .film .archive-item:hover {
   box-shadow:
     inset 0 0 0 1px var(--line-strong),
     var(--shadow-card-hover);
-  transform: translateY(calc(var(--cyl-y, 0px) - 2px)) scale(var(--cyl-s, 1))
-    rotateX(var(--cyl-t, 0deg));
+  transform: translateY(calc(var(--cyl-y, 0px) - 2px)) rotateX(var(--cyl-t, 0deg));
   opacity: 1;
 }
 
