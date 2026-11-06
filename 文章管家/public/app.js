@@ -15,6 +15,8 @@ const state = {
   meta: null, // 分类 / 标签候选
   current: null, // 正在编辑的那篇（含 hash，用于冲突检测）
   dirty: false,
+  // 「更新日期」是否还归自动逻辑管（打开时 true，用户动过这个字段就 false）
+  updatedAuto: true,
   batch: [], // 入库队列：[{ id, filename, raw, plan, form, status, error }]
   batchSel: null, // 队列里选中的那一篇的 id
   drawer: null, // null | 'tags' | 'categories' | 'trash'
@@ -1008,6 +1010,9 @@ async function openEdit(slug) {
     $('fDesc').value = d.description ?? d.explain ?? '';
     $('fDate').value = String(d.pubDate ?? d.date ?? d.created ?? '').slice(0, 10);
     $('fUpdated').value = String(d.updatedDate ?? '').slice(0, 10);
+    // 更新日期先按文件里的原值显示，等真的动了内容再说（见 autoStampUpdated）：
+    // 打开看一眼就关掉，不该把「更新日期」改成今天
+    state.updatedAuto = true;
     TERMS.fCats.set(Array.isArray(d.categories) ? d.categories : d.categories ? [d.categories] : []);
     TERMS.fTags.set(Array.isArray(d.tags) ? d.tags : d.tags ? [d.tags] : []);
     $('fDraft').checked = d.draft === true;
@@ -1030,8 +1035,22 @@ function setSaveState(text, dirty = false) {
   el.className = 'state' + (dirty ? ' dirty' : '');
 }
 
+// 更新日期自动跟着「真的改了内容」走（2026-11-06 用户要求）。
+//
+// 只在第一次动任何字段时盖章一次，之后一直停在今天：
+// 它不是「每次按键都刷新」，而是「这篇文章今天被改过」。
+// 用户自己动过这个字段（state.updatedAuto = false）就不再盖 ——
+// 手动填的日期比自动的优先。
+function autoStampUpdated() {
+  if (!state.updatedAuto) return;
+  const today = todayStr();
+  if ($('fUpdated').value === today) return;
+  $('fUpdated').value = today;
+}
+
 function markDirty() {
   state.dirty = true;
+  autoStampUpdated();
   setSaveState('有未保存的改动（Ctrl+S 保存）', true);
 }
 
@@ -1625,8 +1644,17 @@ function bind() {
   });
   $('btnOpenPost').addEventListener('click', () => state.current && openInSite(state.current.slug, true));
 
-  for (const id of ['fTitle', 'fDesc', 'fDate', 'fUpdated', 'fSeries', 'fSeriesOrder']) {
+  for (const id of ['fTitle', 'fDesc', 'fDate', 'fSeries', 'fSeriesOrder']) {
     $(id).addEventListener('input', markDirty);
+  }
+  // 更新日期是自动盖章的（见 autoStampUpdated）。用户一动它，
+  // 就说明这一篇要自己定日期，之后不再被自动逻辑覆盖 ——
+  // 包括清空（= 这篇不标更新日期）
+  for (const ev of ['input', 'change']) {
+    $('fUpdated').addEventListener(ev, () => {
+      state.updatedAuto = false;
+      markDirty();
+    });
   }
   TERMS.fCats.onChange(markDirty);
   TERMS.fTags.onChange(markDirty);
