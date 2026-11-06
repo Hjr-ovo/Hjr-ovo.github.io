@@ -81,8 +81,10 @@ const pageTitle = title ? `${title} - ${SITE.title}` : SITE.title;
           <span class="site-title">{SITE.title}</span>
         </a>
         <nav class="site-nav">
-          {/* 全部文章走归档页 /posts/；首页仍在 /，从站名/头像进 */}
-          <a href="/posts/">全部文章</a>
+          {/* 首页单独给一个入口：以前只能点站名/头像回去，不够显眼。
+              归档页是 /posts/，导航里叫「归档」——和页面标题保持一致 */}
+          <a href="/">首页</a>
+          <a href="/posts/">归档</a>
           <a href="/categories/">分类</a>
           <a href="/tags/">标签</a>
           <a href="/search/">搜索</a>
