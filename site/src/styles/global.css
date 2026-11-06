@@ -743,19 +743,26 @@ pre code {
   text-decoration: var(--shiki-dark-text-decoration) !important;
 }
 
-/* 表格 —— 技术文档常见 */
+/* 表格 —— 技术文档常见。
+ * 横向滚动交给外面那层 .table-scroll（由 rehype-table-scroll.mjs 在构建时包好）。
+ * ⚠️ 表格自己**不能**用 `display: block; overflow-x: auto` 做滚动（2026-11-06 改）：
+ * 那样内部那个匿名表格盒只按内容宽算，元素盒却是容器的 100%，列加起来 400px、
+ * 盒子 824px，右边空一大块 —— 加了外圈绿框之后那块空白被框进去，看着像画歪了。
+ * 现在的分工：外面滚、里面撑满，内容真超宽时由外层横滚，版面照样不破。 */
+.table-scroll {
+  margin: 1.2em 0;
+  overflow-x: auto;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.92rem;
-  margin: 1.2em 0;
-  display: block;
-  overflow-x: auto;
+  margin: 0;
   /* 外圈一圈品牌绿（2026-11-06）。
      不能写 border：collapse 模式下表格自己的边框和单元格边框在同一个位置上
      打架，冲突规则里单元格胜出，绿线会被 th/td 的灰线盖掉。所以用 outline ——
-     它画在边框盒上、不占布局，也不跟着 overflow 的内容滚走，
-     表格横向滚动时外框还留在原处。offset -1px 正好压住外沿那 1px 灰线 */
+     它画在边框盒上、不占布局。offset -1px 正好压住外沿那 1px 灰线 */
   outline: 1px solid var(--accent);
   outline-offset: -1px;
 }
