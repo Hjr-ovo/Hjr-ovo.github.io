@@ -14,7 +14,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { splitDocumentLoose, parseFields, bodyOf, pick, today } from './fm.mjs';
-import { slugify } from './slug.mjs';
+import { slugify, slugifyAsync } from './slug.mjs';
 import { POSTS_DIR, listPosts, readingStats, uniqueSlug, writeAtomic } from './posts.mjs';
 
 const KNOWN_FIELDS = new Set([
@@ -245,7 +245,8 @@ export async function analyze(raw, ctx = {}) {
 
   // ---- 文件名：自动生成 + 重名自动加序号 ----
   // reserved 是同一批里前面几篇刚分到的名字（还没落盘），见 uniqueSlug 的注释
-  const seed = slugify(fileBase || title);
+  // 主路径走本地模型（slugifyAsync），模型不可用时它内部会退回词表
+  const seed = await slugifyAsync(fileBase || title);
   const slug = await uniqueSlug(seed, ctx.reserved);
   if (slug !== seed) add('warn', `「${seed}」这个名字已经有人用了（站里或这一批里），自动改成「${slug}」`);
   if (!fileBase && !title) add('error', '没有可用的名字，文件名只能手填');

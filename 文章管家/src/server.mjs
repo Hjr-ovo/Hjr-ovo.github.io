@@ -12,6 +12,7 @@ import { exec } from 'node:child_process';
 
 import { listPosts, readPost, savePost, updateTerms, taxonomy, createTerm, renameTerm, deleteTerm, setCategoryDesc, moveToTrash, listTrash, restoreTrash, purgeTrash } from './posts.mjs';
 import { analyze, writePost, existingCategories } from './ingest.mjs';
+import { translateTitles } from './translate.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, '../public');
@@ -195,6 +196,18 @@ async function handleApi(req, res, url) {
         return json(res, status, { error: err.message, code: err.code });
       }
     }
+  }
+
+  // 入库：批量预翻译文件名
+  // 前端是一篇一篇分析的，而模型每次加载要 1.3 秒 —— 六篇就是六次。
+  // 这里先把整批标题一次翻完写进缓存，后面每篇 analyze 都直接命中。
+  if (req.method === 'POST' && url.pathname === '/api/prewarm-slugs') {
+    const body = await readBody(req);
+    const titles = Array.isArray(body.titles)
+      ? body.titles.filter((t) => typeof t === 'string' && t.trim())
+      : [];
+    if (titles.length > 0) await translateTitles(titles);
+    return json(res, 200, { ok: true, count: titles.length });
   }
 
   // 入库：先诊断

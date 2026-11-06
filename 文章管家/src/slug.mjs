@@ -315,6 +315,18 @@ const WORD_MAP = {
 // 无意义的尾词
 const STOP_WORDS = new Set(['the', 'a', 'an', 'of', 'and', 'or', 'to', 'in', 'on', 'for', 'my']);
 
+// 模型译出来的整句里，这些词对文件名没贡献（2026-11-06 加）
+// 例：「Chapter 4 Modelling of needs: landscape, information and category analysis」
+//     → 4-modelling-needs-landscape-information-category-analysis
+const SENTENCE_FILLER = new Set([
+  'the', 'a', 'an', 'of', 'and', 'or', 'to', 'in', 'on', 'for', 'with', 'by', 'from', 'at', 'as',
+  'into', 'over', 'under', 'about', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'this', 'that', 'these', 'those', 'it', 'its', 's', 'so', 'such', 'very', 'more', 'most',
+  // 「第X章」的 chapter：数字已经留下了，chapter 本身是噪音
+  'chapter', 'section', 'part',
+]);
+
+
 // 疑问词翻出来的这三个：只在标题里**没有别的实词**时才留着。
 // 理由：`数据库索引为什么这么快` → database-index-why 里那个 why 是噪音；
 // 但 `为什么 npm install 会卡死` 如果只剩 hang 反而丢了"为什么"这层意思 ——
@@ -461,6 +473,128 @@ function todayStamp() {
     '-' +
     String(d.getDate()).padStart(2, '0')
   );
+}
+
+/**
+ * 翻译前把中文数字章号换成阿拉伯数字
+ *
+ * 为什么要换：模型看到「第一章」会往罗马数字 I 上翻，
+ * 实测「计算机网络第一章 概述」被翻成 "I computer network"，
+ * 后面的「概述」整个丢了，slug 变成 `i-computer-network`。
+ * 换成「第1章」之后模型给的是 "Chapter 1 Overview"，正常。
+ *
+ * @param {string} s
+ * @returns {string}
+ */
+function normalizeChapterNumbers(s) {
+  const DIGITS = { 零: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+
+  const toNum = (cn) => {
+    let total = 0;
+    let cur = 0;
+    for (const ch of cn) {
+      if (ch === '十') {
+        total += (cur || 1) * 10;
+        cur = 0;
+      } else if (ch === '百') {
+        total += (cur || 1) * 100;
+        cur = 0;
+      } else if (DIGITS[ch] !== undefined) {
+        cur = DIGITS[ch];
+      }
+    }
+    return total + cur;
+  };
+
+  return s.replace(/第([零一二三四五六七八九十百]+)([章节篇讲课部])/g, (m, cn, unit) => {
+    const n = toNum(cn);
+    return n > 0 ? `第${n}${unit}` : m;
+  });
+}
+
+/**
+ * 把模型译出来的英文句子压成 slug
+ *
+ * 例：`Chapter 4 Modelling of needs: landscape, information and category analysis`
+ *  →  `4-modelling-needs-landscape-information-category-analysis`
+ *
+ * @param {string} english 模型译文
+ * @returns {string} 清洗后的 slug，可能为空串（表示这条译文不能用）
+ */
+export function slugFromEnglish(english) {
+  const s = String(english || '').toLowerCase().trim();
+  if (!s) return '';
+
+  const words = s
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const kept = [];
+  for (const w of words) {
+    if (SENTENCE_FILLER.has(w)) continue;
+    // 数字不参与去重：章号「第2-2章」会被拆成 2 和 2，
+    // 去重就变成「2-agility-development」，把 -2 吃掉了（2026-11-06 踩到）
+    if (kept.includes(w) && !/^\d+$/.test(w)) continue;
+    kept.push(w);
+  }
+
+  if (kept.length === 0) return '';
+
+  // 疑问词只在没有别的实词时才留（沿用 slugify 的规则）
+  const hasRealWord = kept.some((w) => !QUESTION_WORDS.has(w));
+  const finalWords = hasRealWord ? kept.filter((w) => !QUESTION_WORDS.has(w)) : kept;
+
+  return finalWords.join('-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+}
+
+/**
+ * 中文标题 → 英文文件名（走本地模型）
+ *
+ * 和 slugify() 的分工：
+ *   - slugify()     同步、纯词表，模型不可用时兜底
+ *   - slugifyAsync() 主力，任意中文都能翻
+ *
+ * 为什么模型的结果还要过一遍清洗和校验：
+ *   模型给的是「通顺的英文句子」，不是「文件名」。而且小模型会翻丢内容 ——
+ *   实测 int8 量化版把「第6章 体系结构设计」翻成光秃秃一个 "Chapter 6"，
+ *   这种直接判为不可用，交回词表兜底，否则文件名会变成 `6`。
+ *
+ * @param {string} title
+ * @returns {Promise<string>}
+ */
+export async function slugifyAsync(title) {
+  const raw = String(title || '').trim();
+  if (raw === '') return 'post-' + todayStamp();
+
+  // 「第一章」先换成「第1章」再送进模型，否则会翻成罗马数字 I（见上面的说明）
+  const forTranslation = normalizeChapterNumbers(raw);
+
+  let english = '';
+  try {
+    const { translateOne } = await import('./translate.mjs');
+    english = await translateOne(forTranslation);
+  } catch {
+    english = '';
+  }
+
+  const slug = slugFromEnglish(english);
+
+  // 校验：译文比原文短太多说明翻丢了（保留数字段是为了「第4章 …」这类标题）
+  const cjkCount = (raw.match(/[\u4e00-\u9fff]/g) || []).length;
+  const wordCount = slug ? slug.split('-').filter((w) => !/^\d+$/.test(w)).length : 0;
+  const trustworthy = slug !== '' && !/^[0-9-]+$/.test(slug) && !(cjkCount >= 4 && wordCount < 1);
+
+  if (!trustworthy) return slugify(raw);
+
+  // 太长同样截断（和 slugify 保持一致的 60 字符规则）
+  if (slug.length > 60) {
+    const cut = slug.slice(0, 60);
+    const lastDash = cut.lastIndexOf('-');
+    return (lastDash > 30 ? cut.slice(0, lastDash) : cut).replace(/-+$/, '');
+  }
+
+  return slug;
 }
 
 /**

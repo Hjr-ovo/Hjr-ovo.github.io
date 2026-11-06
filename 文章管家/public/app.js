@@ -1331,6 +1331,20 @@ async function handleFiles(fileList) {
   selectBatch(added[0].id);
   renderBatch();
 
+  // 先把这一批的文件名一次性翻成英文写进缓存。
+  // 下面的分析是一篇一篇走的，每篇都单独起一次本地翻译模型要 1.3 秒，
+  // 六篇就白等八秒；先批量翻好，后面每篇都是直接命中。
+  try {
+    await api('/api/prewarm-slugs', {
+      method: 'POST',
+      body: JSON.stringify({
+        titles: added.map((it) => String(it.filename || '').replace(/\.(md|markdown)$/i, '')),
+      }),
+    });
+  } catch (e) {
+    // 翻不出来不影响入库，后面会退回词表或按日期起名
+  }
+
   // 串行分析：一篇一篇来，队列里能看见进度，也不会一次糊十个请求给本地服务
   for (const item of added) {
     try {

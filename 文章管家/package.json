@@ -1,0 +1,10 @@
+{
+  "name": "article-manager",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "本地文章管家：把 md 入库到 Astro 博客",
+  "dependencies": {
+    "@huggingface/transformers": "^3.7.6"
+  }
+}
