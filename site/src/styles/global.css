@@ -39,11 +39,11 @@
     0 2px 4px rgba(44, 44, 42, 0.05),
     0 8px 20px rgba(15, 110, 86, 0.08);
 
-  --maxw: 46rem;
-  /* 归档页专用的一档：那一页全是「日期 + 字数 + 标题」的短行，
-     46rem 是按一段两百字的正文定的舒适行宽，放到列表上就偏窄。
-     页头/页脚跟着一起放宽，不然上下两端的对齐会错开半个指头。 */
-  --maxw-wide: 54rem;
+  /* 全站统一的内容宽度（2026-11-06 用户要求「所有界面一样大」）。
+     原来 46rem 是按一段两百字的正文定的舒适行宽，归档页单独放宽到 54rem 之后，
+     两页并排看就是「错开一截」，所以干脆全部统一到宽的那一档。
+     中文一行约 45 字，仍在可读范围内。 */
+  --maxw: 54rem;
   --font-sans: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Courier New", monospace;
 
@@ -162,13 +162,6 @@ body {
   max-width: var(--maxw);
   margin: 0 auto;
   padding: 0 1.25rem;
-}
-
-/* 宽一档的页面（归档）。只管 .wrap 的 max-width，
-   内边距和各页自己的排版一概不动 —— 窄屏下 max-width 本来就不起作用，
-   所以这条规则在手机上没有任何影响 */
-body.is-wide .wrap {
-  max-width: var(--maxw-wide);
 }
 
 .site-header {
@@ -1703,6 +1696,28 @@ button.more-link {
   text-decoration: underline;
 }
 
+/* 分类（2026-11-06）：只在「传统」形态露出来，窗口形态一行只留日期/字数/标题。
+   靠 margin-left: auto 推到行尾 —— 标题长短不一时，右侧那列分类会自己对齐成一条线，
+   比紧跟标题好扫。窄到放不下时整组折到下一行（.archive-item 本来就是 flex-wrap）。 */
+.archive-cat {
+  display: none;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: auto;
+}
+
+html[data-archive-view='plain'] .archive-cat {
+  display: inline-flex;
+}
+
+/* 行内的胶囊比别处小一档：它跟标题挤在同一行里，0.78rem 会跟标题抢视线 */
+.archive-cat .tag {
+  font-size: 0.72rem;
+  line-height: 1.5;
+  padding: 0 0.45rem;
+}
+
 /* ---------- 空状态 ---------- */
 
 .empty {
@@ -2325,15 +2340,23 @@ html[data-archive-view='plain'] .film-scroll {
 }
 
 /* 传统形态的行：不浮、不描边、不留缝。负外边距还回去，
-   悬停底色才能延伸到文字两侧（窗口形态为了让卡片不贴边把它收成了 0）。
-   --film-k 归 1：脚本在切形态时已经清掉它，这里再兜一次，
-   免得带 localStorage='plain' 直接进页面时第一帧是半透明的。 */
+   悬停底色才能延伸到文字两侧（窗口形态为了让卡片不贴边把它收成了 0）。 */
 html[data-archive-view='plain'] .film .archive-item {
   margin: 0 -0.55rem;
   padding: 0.45rem 0.55rem;
   background: none;
   border-radius: 8px;
   box-shadow: none;
+  opacity: 1;
+  transform: none;
+}
+
+/* 圆桶的变量在传统形态里没有意义（没有窗口、没有筒）。
+   脚本切形态时已经把 --cyl-* 清掉了，这里再兜一次：
+   带 localStorage='plain' 直接进页面时，第一帧不该是歪的或半透明的。
+   特异性比 .film .archive-item 高一级（多一个属性选择器），写在前面也压得住 */
+html[data-archive-view='plain'] .film .archive-item,
+html[data-archive-view='plain'] .film .archive-date {
   opacity: 1;
   transform: none;
 }
@@ -2391,18 +2414,37 @@ html[data-archive-view='plain'] .film .archive-item:hover {
   box-shadow:
     inset 0 0 0 1px var(--line),
     var(--shadow-card);
-  transform-origin: center;
-  /* 过片：两道「片门」之间完全清楚，卡进上下 48px 才淡出并略微缩小。
-     --film-k 由页面脚本逐帧写入（1 = 清楚，0 = 贴着窗口边）；
-     没 JS 时按 1 算，等于「全都清楚」，不影响阅读 */
-  opacity: calc(0.55 + var(--film-k, 1) * 0.45);
-  transform: translateY(calc((1 - var(--film-k, 1)) * 2px))
-    scale(calc(0.985 + var(--film-k, 1) * 0.015));
   transition:
     background-color 0.16s ease,
     box-shadow 0.16s ease,
-    transform 0.12s ease,
-    opacity 0.12s ease;
+    transform 0.12s ease;
+}
+
+/* ---------- 圆桶（2026-11-06） ----------
+ * 整条时间轴当成一根**横放的圆柱**，每一行贴在筒壁上：
+ * 正对读者的那一段最宽最清楚，越靠近上下两端越窄、越淡 —— 显得筒在那儿转。
+ *
+ * 变换同时挂在卡片和日期上，各算各的 θ：一天里左边日期和右边卡片是两列，
+ * 只弯卡片的话日期会留在原地，两边的基线就错开；而只按「一天一组」整组弯，
+ * 一天六篇的那种会变成一块僵直的板（组内角度差 0.67 弧度，够看出来了）。
+ *
+ * 三个变量都由页面脚本逐帧写（见 syncDepth）：
+ *   --cyl-y  纵向位移（筒面投影与平面位置的差）
+ *   --cyl-s  缩放（= cos θ，两端变窄）
+ *   --cyl-o  不透明度（最淡停在 0.35，不再往下掉）
+ * 没有 JS 时三个都取默认值：位置不动、不缩放、全不透明，等于没这个效果。
+ *
+ * ⚠️ transition 只给 transform/opacity，且要短：脚本每帧都在改这三个值，
+ * transition 太长会让卡片「追不上」滚动。
+ */
+.film .archive-item,
+.film .archive-date {
+  transform: translateY(var(--cyl-y, 0px)) scale(var(--cyl-s, 1));
+  transform-origin: center;
+  opacity: var(--cyl-o, 1);
+  transition:
+    transform 0.1s ease-out,
+    opacity 0.1s ease-out;
 }
 
 /* 卡片之间留缝：同一天的多篇、跨天的、跨月的都要 */
@@ -2415,12 +2457,15 @@ html[data-archive-view='plain'] .film .archive-item:hover {
 }
 
 /* 悬停权重必须单独写一遍：.film .archive-item 和 .archive-item:hover
-   同为 (0,2,0)，靠源码顺序才压得住，悬停会失效 */
+   同为 (0,2,0)，靠源码顺序才压得住，悬停会失效。
+   ⚠️ transform 要在 --cyl-* 的基础上叠：直接写 translateY(-2px) 会把圆桶
+   那一段整个丢掉，鼠标一上去卡片就「弹正」。
+   位移只有 -2px：卡片挨得近，抬 2px 会让上下两行看起来在打架 */
 .film .archive-item:hover {
   box-shadow:
     inset 0 0 0 1px var(--line-strong),
     var(--shadow-card-hover);
-  transform: translateY(-2px) scale(1);
+  transform: translateY(calc(var(--cyl-y, 0px) - 2px)) scale(var(--cyl-s, 1));
   opacity: 1;
 }
 
