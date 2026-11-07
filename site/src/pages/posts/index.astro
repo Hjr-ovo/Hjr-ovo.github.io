@@ -617,34 +617,32 @@ for (const post of posts) {
       }
     };
 
-    // ---- 滚轮判定范围（2026-11-06）----
-    // 只要指针落在窗口这一块（.film）上，滚轮就归窗口管。
-    // 原来能滚的只有 .film-scroll 那一条，指针压在窗口的内边距、左边月份轨、
-    // 卡片之间的空当上，滚轮就滑给整页去了 —— 看着像「窗口不响应」。
-    // 所以在壳上兜一层：目标本来就在滚动区里的不管（原生已经处理），
-    // 以外的喂给窗口滚；滚到头了也不拦，交回页面 —— 跟原生链式滚动一个规矩。
-    // ⚠️ 必须 passive: false 才拦得住，否则窗口滚一道、页面也滚一道。
+    // ---- 滚轮判定范围（2026-11-06 加，11-07 重写）----
+    // 只要指针落在窗口这一块（.film）上，滚轮就**只**归窗口管，页面一下都不许动。
+    //
+    // ⚠️ 2026-11-07 修的坑：原来分了两条路 —— 目标本来就在 .film-scroll 里就
+    // return 交给浏览器原生滚，只有压在壳的内边距 / 月份轨上才由脚本接管。
+    // 可浏览器原生滚动有「滚动链」（scroll chaining）：内层滚到顶或到底，
+    // 剩下的滚动量会顺着祖先传出去，整页跟着走 —— 表现就是「有概率页面也滚」，
+    // 其实每次都是到边界那一下。兜底分支里还主动写了「到头就交回页面」，同一处漏。
+    // 现在统一：窗口形态下指针在 .film 内、且这一下是竖向滚，先吃掉默认行为，
+    // 再由脚本改 scroller.scrollTop 并夹在 [0, max]。到头也不放行 —— 用户要的是
+    // 「鼠标摆在窗口里，滚的就是窗口」；想滚页面把指针移出窗口即可。
+    // ⚠️ 必须 passive: false，否则 preventDefault 无效，窗口滚一道、页面也滚一道。
     const onWheel = (event) => {
-      // ctrl + 滚轮是浏览器缩放，别抢
-      if (event.ctrlKey || event.defaultPrevented) return;
-      // 传统形态没有窗口（限高被撤掉），内容不满一屏也没有「翻」可言
-      if (isPlain() || maxScroll() <= 4) return;
-      // 已经在滚动区里：交给原生，它滚到头会自己链给页面
-      if (event.target instanceof Element && event.target.closest('[data-film-scroll]')) return;
+      // ctrl + 滚轮是浏览器缩放；已经被别的处理器吃掉的别抢；传统形态没有窗口
+      if (event.ctrlKey || event.defaultPrevented || isPlain()) return;
+      // 纯横向手势（deltaY 恰好 0）放行；斜着滑时哪怕横向分量更大也要接管，
+      // 不然剩下那点 deltaY 会滚到页面上去
+      if (event.deltaY === 0) return;
 
+      // 先拦再滚。不拦的话浏览器会自己去滚 .film-scroll，并在到头时链给页面
+      event.preventDefault();
       // deltaMode 0=像素 1=行 2=页，Firefox 给的是「行」
       const unit =
         event.deltaMode === 1 ? 18 : event.deltaMode === 2 ? scroller.clientHeight : 1;
       const max = maxScroll();
       const next = scroller.scrollTop + event.deltaY * unit;
-      // 这一下已经到头了，别拦，让页面接着滚
-      if (
-        (next <= 0 && scroller.scrollTop <= 0) ||
-        (next >= max && scroller.scrollTop >= max)
-      ) {
-        return;
-      }
-      event.preventDefault();
       scroller.scrollTop = Math.max(0, Math.min(max, next));
     };
     film.addEventListener('wheel', onWheel, { passive: false });

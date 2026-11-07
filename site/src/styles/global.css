@@ -2321,6 +2321,10 @@ button.more-link {
      翻得太勤；再高就不像「窗口」了，整页铺开也就失去胶片的意义 */
   max-height: min(78vh, 42rem);
   overflow-y: auto;
+  /* 兜底：不让触摸板 / 触屏 / 键盘把滚动量链给外层页面（2026-11-07）。
+     wheel 那条路已经由脚本 preventDefault 全接管了，这一句是给非 wheel 的
+     滚动方式（触摸 pan、PageDown、触控板惯性回弹）也上同一道锁 */
+  overscroll-behavior: contain;
   /* 留一点边：卡片阴影和过片时的位移不会被裁掉 */
   padding: 0.2rem 0.4rem;
   /* 藏滚动条：这是一条胶片，不是一个下拉框。
